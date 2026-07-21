@@ -26,6 +26,12 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
   const [newPassword, setNewPassword] = useState('');
   const [addingMember, setAddingMember] = useState(false);
 
+  // Change password
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPasswordVal, setNewPasswordVal] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
   useEffect(() => {
     fetchTiktokStatus();
     fetchGmailStatus();
@@ -132,6 +138,29 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
       if (res.ok) { showToast(`${name} removed.`); fetchTeam(); }
       else showToast('Failed to remove member.', true);
     } catch { showToast('Failed to remove member.', true); }
+  }
+
+  async function changePassword(e) {
+    e.preventDefault();
+    if (newPasswordVal !== confirmPassword) { showToast('Passwords do not match.', true); return; }
+    if (newPasswordVal.length < 8) { showToast('Password must be at least 8 characters.', true); return; }
+    setChangingPassword(true);
+    try {
+      const { getToken } = await import('./auth.js');
+      const res = await fetch(`${API_BASE}/auth/users/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ newPassword: newPasswordVal }),
+      });
+      if (res.ok) {
+        showToast('Password updated!');
+        setCurrentPassword(''); setNewPasswordVal(''); setConfirmPassword('');
+      } else {
+        const { error } = await res.json();
+        showToast(error || 'Failed to update password.', true);
+      }
+    } catch { showToast('Failed to update password.', true); }
+    finally { setChangingPassword(false); }
   }
 
   function showToast(msg, isError = false) {
@@ -306,6 +335,18 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
             </form>
           </section>
         )}
+
+        {/* Change Password */}
+        <section className="settings-section">
+          <h3>Change Password</h3>
+          <form className="add-member-form" onSubmit={changePassword}>
+            <input className="settings-input" type="password" placeholder="New password" value={newPasswordVal} onChange={e => setNewPasswordVal(e.target.value)} required />
+            <input className="settings-input" type="password" placeholder="Confirm new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+            <button className="btn-save" type="submit" disabled={changingPassword}>
+              {changingPassword ? 'Updating…' : 'Update password'}
+            </button>
+          </form>
+        </section>
 
         <div className="settings-footer">
           <button className="btn-save" onClick={onClose}>Save & close</button>
