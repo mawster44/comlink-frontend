@@ -93,7 +93,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
   async function fetchTeam() {
     try {
       const { getToken } = await import('./auth.js');
-      const res = await fetch('/auth/users/users', { headers: { Authorization: `Bearer ${getToken()}` } });
+      const res = await fetch(`${API_BASE}/auth/users/users`, { headers: { Authorization: `Bearer ${getToken()}` } });
       if (res.ok) setTeamMembers(await res.json());
     } catch {}
   }
@@ -104,7 +104,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
     setAddingMember(true);
     try {
       const { getToken } = await import('./auth.js');
-      const res = await fetch('/auth/users/users', {
+      const res = await fetch(`${API_BASE}/auth/users/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ name: newName, email: newEmail, password: newPassword, role: 'agent' }),
@@ -125,7 +125,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
     if (!confirm(`Remove ${name} from the team?`)) return;
     try {
       const { getToken } = await import('./auth.js');
-      const res = await fetch(`/auth/users/users/${id}`, {
+      const res = await fetch(`${API_BASE}/auth/users/users/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${getToken()}` },
       });
