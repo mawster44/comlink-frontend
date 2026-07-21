@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { setToken } from './auth.js';
 import './Login.css';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,7 +15,7 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/auth/users/login', {
+      const res = await fetch(`${API_BASE}/auth/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
