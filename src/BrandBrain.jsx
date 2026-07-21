@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from './auth.js';
 import './BrandBrain.css';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function BrandBrain({ onClose }) {
   const [brain, setBrain] = useState(null);
@@ -12,15 +15,14 @@ export default function BrandBrain({ onClose }) {
   useEffect(() => { fetchBrain(); }, []);
 
   async function fetchBrain() {
-    const res = await fetch('/api/brand-brain');
+    const res = await apiFetch('/api/brand-brain');
     setBrain(await res.json());
   }
 
   async function save() {
     setSaving(true);
-    await fetch('/api/brand-brain', {
+    await apiFetch('/api/brand-brain', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(brain),
     });
     setSaving(false);
@@ -31,9 +33,8 @@ export default function BrandBrain({ onClose }) {
   async function addExample() {
     if (!newExample.customerMessage.trim() || !newExample.shopReply.trim()) return;
     setAddingExample(true);
-    await fetch('/api/brand-brain/examples', {
+    await apiFetch('/api/brand-brain/examples', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newExample),
     });
     setNewExample({ customerMessage: '', shopReply: '', notes: '' });
@@ -42,7 +43,7 @@ export default function BrandBrain({ onClose }) {
   }
 
   async function deleteExample(i) {
-    await fetch(`/api/brand-brain/examples/${i}`, { method: 'DELETE' });
+    await apiFetch(`/api/brand-brain/examples/${i}`, { method: 'DELETE' });
     fetchBrain();
   }
 
