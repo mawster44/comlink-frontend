@@ -6,6 +6,7 @@ export default function AffiliateBrain({ onClose }) {
   const [brain, setBrain] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [tab, setTab] = useState('prompt');
   const [newExample, setNewExample] = useState({ creatorMessage: '', shopReply: '', notes: '' });
   const [addingExample, setAddingExample] = useState(false);
@@ -15,6 +16,14 @@ export default function AffiliateBrain({ onClose }) {
   async function fetchBrain() {
     const res = await apiFetch('/api/affiliate-brain');
     setBrain(await res.json());
+  }
+
+  async function resetToDefault() {
+    if (!confirm('Reset the system prompt to the built-in default? Your examples will be kept.')) return;
+    setResetting(true);
+    const res = await apiFetch('/api/affiliate-brain/reset', { method: 'POST' });
+    setBrain(await res.json());
+    setResetting(false);
   }
 
   async function save() {
@@ -60,6 +69,9 @@ export default function AffiliateBrain({ onClose }) {
             Affiliate Brain
           </div>
           <div className="bb-header-actions">
+            <button className="bb-save-btn" onClick={resetToDefault} disabled={resetting} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--muted)' }}>
+              {resetting ? 'Resetting...' : 'Reset to default'}
+            </button>
             <button className="bb-save-btn" onClick={save} disabled={saving}>
               {saved ? 'Saved!' : saving ? 'Saving...' : 'Save changes'}
             </button>
