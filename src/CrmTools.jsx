@@ -17,13 +17,12 @@ export function StatusBadge({ status }) {
 }
 
 export function CrmListMeta({ crm }) {
-  if (!crm) return null;
-  const hasLabels = crm.labels?.length > 0;
-  if (crm.status === 'open' && !hasLabels) return null;
+  const status = crm?.status || 'open';
+  const labels = crm?.labels || [];
   return (
     <div className="crm-list-meta">
-      {crm.status !== 'open' && <StatusBadge status={crm.status} />}
-      {crm.labels?.map(l => <span key={l} className="crm-label-chip">{l}</span>)}
+      <StatusBadge status={status} />
+      {labels.map(l => <span key={l} className="crm-label-chip">{l}</span>)}
     </div>
   );
 }
