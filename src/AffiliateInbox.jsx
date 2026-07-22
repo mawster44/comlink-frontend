@@ -20,6 +20,7 @@ function AvatarImg({ name, avatar }) {
 export function AffiliateList({ activeId, onSelect }) {
   const [convos, setConvos] = useState([]);
   const [connected, setConnected] = useState(null);
+  const [apiError, setApiError] = useState(null);
   const [showBrain, setShowBrain] = useState(false);
 
   useEffect(() => {
@@ -47,8 +48,16 @@ export function AffiliateList({ activeId, onSelect }) {
   async function fetchConvos() {
     try {
       const res = await apiFetch('/api/affiliate-messages');
-      if (res.ok) setConvos(await res.json());
-    } catch {}
+      const data = await res.json();
+      if (res.ok) {
+        setConvos(data);
+        setApiError(null);
+      } else {
+        setApiError(data.error || `Error ${res.status}`);
+      }
+    } catch (e) {
+      setApiError(e.message);
+    }
   }
 
   const totalUnread = convos.reduce((s, c) => s + (c.unread || 0), 0);
@@ -68,7 +77,12 @@ export function AffiliateList({ activeId, onSelect }) {
             Connect TikTok in Settings to access affiliate messages.
           </p>
         )}
-        {connected && convos.length === 0 && <p className="empty">No affiliate conversations</p>}
+        {connected && apiError && (
+          <p className="empty" style={{ fontSize: '0.8rem', color: '#e57373', lineHeight: 1.4 }}>
+            API error: {apiError}
+          </p>
+        )}
+        {connected && !apiError && convos.length === 0 && <p className="empty">No affiliate conversations</p>}
         {convos.map(c => (
           <button
             key={c.id}
