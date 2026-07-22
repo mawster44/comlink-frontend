@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { apiFetch } from './auth.js';
 import './Settings.css';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 const MODELS = [
   { id: 'claude', label: 'Claude (Anthropic)', desc: 'claude-sonnet-5', color: '#c97e3a' },
   { id: 'gpt',    label: 'GPT-4o (OpenAI)',   desc: 'gpt-4o',          color: '#10a37f' },
