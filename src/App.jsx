@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Settings from './Settings.jsx';
 import BrandBrain from './BrandBrain.jsx';
+import { AffiliateList, AffiliateThread } from './AffiliateInbox.jsx';
 import { apiFetch, clearToken } from './auth.js';
 import './App.css';
 
@@ -32,6 +33,8 @@ export default function App({ user, onLogout }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(window.location.pathname === '/settings');
   const [showBrandBrain, setShowBrandBrain] = useState(false);
+  const [view, setView] = useState('customers'); // 'customers' | 'affiliates'
+  const [affiliateActiveId, setAffiliateActiveId] = useState(null);
 
   // Compose state
   const [draft, setDraft] = useState('');
@@ -122,9 +125,11 @@ export default function App({ user, onLogout }) {
           <div className="logo">
             <span className="logo-icon">◈</span>
             <span className="logo-text">Comlink</span>
-            {totalUnread > 0 && <span className="badge">{totalUnread}</span>}
+            {view === 'customers' && totalUnread > 0 && <span className="badge">{totalUnread}</span>}
           </div>
-          <button className="icon-btn" onClick={() => setShowBrandBrain(true)} title="Brand Brain">◈</button>
+          {view === 'customers' && (
+            <button className="icon-btn" onClick={() => setShowBrandBrain(true)} title="Brand Brain">◈</button>
+          )}
           <button className="icon-btn" onClick={() => { setShowSettings(true); window.history.replaceState({}, '', '/settings'); }} title="Settings">⚙</button>
         </div>
 
@@ -136,42 +141,71 @@ export default function App({ user, onLogout }) {
           <button className="icon-btn" onClick={onLogout} title="Sign out">⎋</button>
         </div>
 
-        <div className="convo-list">
-          {convos.length === 0 && <p className="empty">No messages yet</p>}
-          {convos.map(c => (
-            <button
-              key={c.id}
-              className={`convo-item ${c.id === activeId ? 'active' : ''}`}
-              onClick={() => setActiveId(c.id)}
-            >
-              <Avatar name={c.customer?.name} />
-              <div className="convo-meta">
-                <div className="convo-row">
-                  <span className="convo-name">{c.customer?.name || 'Customer'}</span>
-                  <span className={`source-badge ${c.source === 'gmail' ? 'badge-gmail' : 'badge-tiktok'}`}>
-                    {c.source === 'gmail' ? 'Gmail' : 'TikTok'}
-                  </span>
-                  <span className="convo-time">{timeAgo(c.updatedAt)}</span>
-                </div>
-                <div className="convo-row">
-                  <span className="convo-preview">{c.messages.at(-1)?.text?.slice(0, 40)}…</span>
-                  {c.unread > 0 && <span className="unread-dot">{c.unread}</span>}
-                </div>
-              </div>
-            </button>
-          ))}
+        <div className="view-toggle">
+          <button
+            className={`toggle-btn ${view === 'customers' ? 'active' : ''}`}
+            onClick={() => setView('customers')}
+          >
+            Customer Support
+          </button>
+          <button
+            className={`toggle-btn ${view === 'affiliates' ? 'active' : ''}`}
+            onClick={() => setView('affiliates')}
+          >
+            Affiliates
+          </button>
         </div>
+
+        {view === 'customers' && (
+          <div className="convo-list">
+            {convos.length === 0 && <p className="empty">No messages yet</p>}
+            {convos.map(c => (
+              <button
+                key={c.id}
+                className={`convo-item ${c.id === activeId ? 'active' : ''}`}
+                onClick={() => setActiveId(c.id)}
+              >
+                <Avatar name={c.customer?.name} />
+                <div className="convo-meta">
+                  <div className="convo-row">
+                    <span className="convo-name">{c.customer?.name || 'Customer'}</span>
+                    <span className={`source-badge ${c.source === 'gmail' ? 'badge-gmail' : 'badge-tiktok'}`}>
+                      {c.source === 'gmail' ? 'Gmail' : 'TikTok'}
+                    </span>
+                    <span className="convo-time">{timeAgo(c.updatedAt)}</span>
+                  </div>
+                  <div className="convo-row">
+                    <span className="convo-preview">{c.messages.at(-1)?.text?.slice(0, 40)}…</span>
+                    {c.unread > 0 && <span className="unread-dot">{c.unread}</span>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {view === 'affiliates' && (
+          <AffiliateList
+            activeId={affiliateActiveId}
+            onSelect={c => setAffiliateActiveId(c.id)}
+          />
+        )}
       </aside>
 
       <main className="main">
-        {!active ? (
+        {view === 'affiliates' && (
+          affiliateActiveId
+            ? <AffiliateThread convId={affiliateActiveId} model={model} setModel={setModel} />
+            : <div className="empty-state"><div className="empty-icon">◈</div><p>Select an affiliate conversation</p></div>
+        )}
+        {view === 'customers' && !active ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
             <p>Select a conversation</p>
           </div>
-        ) : (
+        ) : view === 'customers' ? (
           <>
-            <div className="thread-header">
+            <div className="thread-header" key="customer-thread">
               <Avatar name={active.customer?.name} />
               <div>
                 <span className="thread-name">{active.customer?.name}</span>
