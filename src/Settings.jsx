@@ -17,6 +17,10 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
   const [slackUrl, setSlackUrl] = useState('');
   const [savingSlack, setSavingSlack] = useState(false);
   const [testingSlack, setTestingSlack] = useState(false);
+  const [affiliateSlack, setAffiliateSlack] = useState({ connected: false });
+  const [affiliateSlackUrl, setAffiliateSlackUrl] = useState('');
+  const [savingAffiliateSlack, setSavingAffiliateSlack] = useState(false);
+  const [testingAffiliateSlack, setTestingAffiliateSlack] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
 
   // Team management
@@ -36,6 +40,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
     fetchTiktokStatus();
     fetchGmailStatus();
     fetchSlackStatus();
+    fetchAffiliateSlackStatus();
     if (user?.role === 'admin') fetchTeam();
 
     const params = new URLSearchParams(window.location.search);
@@ -60,6 +65,34 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
 
   async function fetchSlackStatus() {
     try { setSlack(await (await fetch(`${API_BASE}/api/slack/status`)).json()); } catch {}
+  }
+
+  async function fetchAffiliateSlackStatus() {
+    try { setAffiliateSlack(await (await fetch(`${API_BASE}/api/slack/affiliate-status`)).json()); } catch {}
+  }
+
+  async function saveAffiliateSlackWebhook() {
+    if (!affiliateSlackUrl.startsWith('https://hooks.slack.com/')) {
+      showToast('That does not look like a valid Slack webhook URL.', true);
+      return;
+    }
+    setSavingAffiliateSlack(true);
+    const res = await fetch(`${API_BASE}/api/slack/affiliate-webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: affiliateSlackUrl }),
+    });
+    setSavingAffiliateSlack(false);
+    if (res.ok) { showToast('Affiliate Slack webhook saved!'); setAffiliateSlackUrl(''); fetchAffiliateSlackStatus(); }
+    else showToast('Failed to save webhook.', true);
+  }
+
+  async function testAffiliateSlack() {
+    setTestingAffiliateSlack(true);
+    const res = await fetch(`${API_BASE}/api/slack/affiliate-test`, { method: 'POST' });
+    setTestingAffiliateSlack(false);
+    if (res.ok) showToast('Test message sent to affiliate Slack!');
+    else showToast('Test failed. Check your webhook URL.', true);
   }
 
   async function saveSlackWebhook() {
@@ -264,6 +297,43 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
               />
               <button className="btn-connect" onClick={saveSlackWebhook} disabled={savingSlack || !slackUrl}>
                 {savingSlack ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          )}
+
+          {/* Affiliate Slack */}
+          <div className="integration-card" style={{ marginTop: 10 }}>
+            <div className="integration-icon slack-icon">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+                <path d="M14.5 10a1.5 1.5 0 0 1-1.5-1.5v-5a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-1.5 1.5zm-5 1a1.5 1.5 0 0 0 1.5 1.5h5a1.5 1.5 0 0 0 0-3h-5A1.5 1.5 0 0 0 9.5 11zm-5 2.5a1.5 1.5 0 0 0 1.5 1.5h1.5v1.5a1.5 1.5 0 0 0 3 0V15h-1.5A1.5 1.5 0 0 0 7.5 13.5H6a1.5 1.5 0 0 0-1.5 1.5zm9.5 3a1.5 1.5 0 0 0 1.5-1.5v-1.5H14a1.5 1.5 0 0 0-1.5 1.5v1.5a1.5 1.5 0 0 0 1.5 1.5z" fill="currentColor"/>
+              </svg>
+            </div>
+            <div className="integration-info">
+              <div className="integration-name">Slack — Affiliate Inbox</div>
+              <div className={`integration-status ${affiliateSlack.connected ? 'connected' : 'disconnected'}`}>
+                <span className="status-dot" />
+                {affiliateSlack.connected ? 'Webhook connected' : 'Not connected'}
+              </div>
+            </div>
+            <div className="integration-action">
+              {affiliateSlack.connected && (
+                <button className="btn-disconnect" onClick={testAffiliateSlack} disabled={testingAffiliateSlack}>
+                  {testingAffiliateSlack ? 'Sending...' : 'Test'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!affiliateSlack.connected && (
+            <div className="slack-webhook-form">
+              <input
+                className="slack-webhook-input"
+                placeholder="https://hooks.slack.com/services/..."
+                value={affiliateSlackUrl}
+                onChange={e => setAffiliateSlackUrl(e.target.value)}
+              />
+              <button className="btn-connect" onClick={saveAffiliateSlackWebhook} disabled={savingAffiliateSlack || !affiliateSlackUrl}>
+                {savingAffiliateSlack ? 'Saving...' : 'Save'}
               </button>
             </div>
           )}
