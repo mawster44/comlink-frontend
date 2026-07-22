@@ -218,7 +218,10 @@ export function AffiliateThread({ convId, model, setModel }) {
         {active.messages.map((m, i) => (
           <div key={i} className={`bubble-wrap ${m.role === 'shop' ? 'outbound' : 'inbound'}`}>
             <div className="bubble">
-              <p style={{ whiteSpace: 'pre-wrap' }}>{m.text}</p>
+              {m.imageUrl
+                ? <img src={m.imageUrl} alt="attachment" style={{ maxWidth: '100%', borderRadius: 8 }} />
+                : <p style={{ whiteSpace: 'pre-wrap' }}>{m.text}</p>
+              }
               <span className="bubble-time">{timeAgoLocal(m.ts)}</span>
             </div>
           </div>
