@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from './auth.js';
 import './Settings.css';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const MODELS = [
   { id: 'claude', label: 'Claude (Anthropic)', desc: 'claude-sonnet-5', color: '#c97e3a' },
@@ -64,11 +63,11 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
   }
 
   async function fetchSlackStatus() {
-    try { setSlack(await (await fetch(`${API_BASE}/api/slack/status`)).json()); } catch {}
+    try { setSlack(await (await apiFetch('/api/slack/status')).json()); } catch {}
   }
 
   async function fetchAffiliateSlackStatus() {
-    try { setAffiliateSlack(await (await fetch(`${API_BASE}/api/slack/affiliate-status`)).json()); } catch {}
+    try { setAffiliateSlack(await (await apiFetch('/api/slack/affiliate-status')).json()); } catch {}
   }
 
   async function saveAffiliateSlackWebhook() {
@@ -77,9 +76,8 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
       return;
     }
     setSavingAffiliateSlack(true);
-    const res = await fetch(`${API_BASE}/api/slack/affiliate-webhook`, {
+    const res = await apiFetch('/api/slack/affiliate-webhook', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: affiliateSlackUrl }),
     });
     setSavingAffiliateSlack(false);
@@ -89,7 +87,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
 
   async function testAffiliateSlack() {
     setTestingAffiliateSlack(true);
-    const res = await fetch(`${API_BASE}/api/slack/affiliate-test`, { method: 'POST' });
+    const res = await apiFetch('/api/slack/affiliate-test', { method: 'POST' });
     setTestingAffiliateSlack(false);
     if (res.ok) showToast('Test message sent to affiliate Slack!');
     else showToast('Test failed. Check your webhook URL.', true);
@@ -101,9 +99,8 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
       return;
     }
     setSavingSlack(true);
-    const res = await fetch(`${API_BASE}/api/slack/webhook`, {
+    const res = await apiFetch('/api/slack/webhook', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: slackUrl }),
     });
     setSavingSlack(false);
@@ -113,19 +110,19 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
 
   async function testSlack() {
     setTestingSlack(true);
-    const res = await fetch(`${API_BASE}/api/slack/test`, { method: 'POST' });
+    const res = await apiFetch('/api/slack/test', { method: 'POST' });
     setTestingSlack(false);
     if (res.ok) showToast('Test message sent to Slack!');
     else showToast('Test failed. Check your webhook URL.', true);
   }
 
   async function disconnectTiktok() {
-    await fetch(`${API_BASE}/auth/disconnect`, { method: 'POST' });
+    await apiFetch('/auth/disconnect', { method: 'POST' });
     fetchTiktokStatus();
   }
 
   async function disconnectGmail() {
-    await fetch(`${API_BASE}/auth/gmail/disconnect`, { method: 'POST' });
+    await apiFetch('/auth/gmail/disconnect', { method: 'POST' });
     fetchGmailStatus();
   }
 
