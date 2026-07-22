@@ -276,7 +276,7 @@ export default function App({ user, onLogout }) {
               </div>
             </div>
           </>
-        )}
+        ) : null}
       </main>
 
       {showBrandBrain && <BrandBrain onClose={() => setShowBrandBrain(false)} />}
