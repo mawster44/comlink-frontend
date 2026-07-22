@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Settings from './Settings.jsx';
 import BrandBrain from './BrandBrain.jsx';
 import { AffiliateList, AffiliateThread } from './AffiliateInbox.jsx';
+import { CrmListMeta, CrmThreadPanel, NoteMessage } from './CrmTools.jsx';
 import { apiFetch, clearToken } from './auth.js';
 import './App.css';
 
@@ -35,6 +36,8 @@ export default function App({ user, onLogout }) {
   const [showBrandBrain, setShowBrandBrain] = useState(false);
   const [view, setView] = useState('customers'); // 'customers' | 'affiliates'
   const [affiliateActiveId, setAffiliateActiveId] = useState(null);
+  const [crmData, setCrmData] = useState({});
+  const [activeCrm, setActiveCrm] = useState(null);
 
   // Compose state
   const [draft, setDraft] = useState('');
@@ -47,12 +50,13 @@ export default function App({ user, onLogout }) {
 
   useEffect(() => {
     fetchConvos();
+    fetchAllCrm();
     const interval = setInterval(fetchConvos, 5000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (activeId) { fetchActive(activeId); setDraft(''); setError(null); }
+    if (activeId) { fetchActive(activeId); fetchCrm(activeId); setDraft(''); setError(null); }
   }, [activeId]);
 
   useEffect(() => {
@@ -74,6 +78,20 @@ export default function App({ user, onLogout }) {
     try {
       const res = await apiFetch(`/api/messages/${id}`);
       if (res) setActive(await res.json());
+    } catch {}
+  }
+
+  async function fetchAllCrm() {
+    try {
+      const res = await apiFetch('/api/crm');
+      if (res?.ok) setCrmData(await res.json());
+    } catch {}
+  }
+
+  async function fetchCrm(id) {
+    try {
+      const res = await apiFetch(`/api/crm/${id}`);
+      if (res?.ok) setActiveCrm(await res.json());
     } catch {}
   }
 
@@ -178,6 +196,7 @@ export default function App({ user, onLogout }) {
                     <span className="convo-preview">{c.messages.at(-1)?.text?.slice(0, 40)}…</span>
                     {c.unread > 0 && <span className="unread-dot">{c.unread}</span>}
                   </div>
+                  <CrmListMeta crm={crmData[c.id]} />
                 </div>
               </button>
             ))}
@@ -207,7 +226,7 @@ export default function App({ user, onLogout }) {
           <>
             <div className="thread-header" key="customer-thread">
               <Avatar name={active.customer?.name} />
-              <div>
+              <div style={{ flex: 1 }}>
                 <span className="thread-name">{active.customer?.name}</span>
                 {active.customer?.email && (
                   <span className="thread-email">{active.customer.email}</span>
@@ -215,15 +234,28 @@ export default function App({ user, onLogout }) {
               </div>
             </div>
 
+            <CrmThreadPanel
+              convId={activeId}
+              crm={activeCrm}
+              onUpdate={updated => { setActiveCrm(updated); setCrmData(prev => ({ ...prev, [activeId]: updated })); }}
+            />
+
             <div className="thread">
-              {active.messages.map((m, i) => (
-                <div key={i} className={`bubble-wrap ${m.role === 'shop' ? 'outbound' : 'inbound'}`}>
-                  <div className="bubble">
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{m.text}</p>
-                    <span className="bubble-time">{timeAgo(m.ts)}</span>
-                  </div>
-                </div>
-              ))}
+              {[...(active.messages || []), ...((activeCrm?.notes || []).map(n => ({ ...n, _isNote: true })))]
+                .sort((a, b) => a.ts - b.ts)
+                .map((item, i) =>
+                  item._isNote
+                    ? <NoteMessage key={`note-${item.id}`} note={item} />
+                    : (
+                      <div key={i} className={`bubble-wrap ${item.role === 'shop' ? 'outbound' : 'inbound'}`}>
+                        <div className="bubble">
+                          <p style={{ whiteSpace: 'pre-wrap' }}>{item.text}</p>
+                          <span className="bubble-time">{timeAgo(item.ts)}</span>
+                        </div>
+                      </div>
+                    )
+                )
+              }
               <div ref={bottomRef} />
             </div>
 

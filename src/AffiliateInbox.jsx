@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from './auth.js';
 import AffiliateBrain from './AffiliateBrain.jsx';
+import { CrmListMeta, CrmThreadPanel, NoteMessage } from './CrmTools.jsx';
 
 function timeAgo(ts) {
   const diff = Date.now() - ts;
@@ -16,12 +17,12 @@ function AvatarImg({ name, avatar }) {
   return <div className="avatar">{initials}</div>;
 }
 
-// Sidebar list — renders in the <aside>, calls onSelect when a conversation is clicked
 export function AffiliateList({ activeId, onSelect }) {
   const [convos, setConvos] = useState([]);
   const [connected, setConnected] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [showBrain, setShowBrain] = useState(false);
+  const [crmData, setCrmData] = useState({});
 
   useEffect(() => {
     checkStatus();
@@ -30,6 +31,7 @@ export function AffiliateList({ activeId, onSelect }) {
   useEffect(() => {
     if (connected) {
       fetchConvos();
+      fetchCrm();
       const interval = setInterval(fetchConvos, 15000);
       return () => clearInterval(interval);
     }
@@ -49,15 +51,18 @@ export function AffiliateList({ activeId, onSelect }) {
     try {
       const res = await apiFetch('/api/affiliate-messages');
       const data = await res.json();
-      if (res.ok) {
-        setConvos(data);
-        setApiError(null);
-      } else {
-        setApiError(data.error || `Error ${res.status}`);
-      }
+      if (res.ok) { setConvos(data); setApiError(null); }
+      else setApiError(data.error || `Error ${res.status}`);
     } catch (e) {
       setApiError(e.message);
     }
+  }
+
+  async function fetchCrm() {
+    try {
+      const res = await apiFetch('/api/crm');
+      if (res?.ok) setCrmData(await res.json());
+    } catch {}
   }
 
   const totalUnread = convos.reduce((s, c) => s + (c.unread || 0), 0);
@@ -100,6 +105,7 @@ export function AffiliateList({ activeId, onSelect }) {
                 <span className="convo-preview">Affiliate creator</span>
                 {c.unread > 0 && <span className="unread-dot">{c.unread}</span>}
               </div>
+              <CrmListMeta crm={crmData[c.id]} />
             </div>
           </button>
         ))}
@@ -110,9 +116,9 @@ export function AffiliateList({ activeId, onSelect }) {
   );
 }
 
-// Main panel thread view for an affiliate conversation
 export function AffiliateThread({ convId, model, setModel }) {
   const [active, setActive] = useState(null);
+  const [crm, setCrm] = useState(null);
   const [draft, setDraft] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
@@ -128,12 +134,12 @@ export function AffiliateThread({ convId, model, setModel }) {
   ];
 
   useEffect(() => {
-    if (convId) { fetchActive(convId); setDraft(''); setError(null); }
+    if (convId) { fetchActive(convId); fetchCrm(convId); setDraft(''); setError(null); }
   }, [convId]);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-  }, [active?.messages]);
+  }, [active?.messages, crm?.notes]);
 
   useEffect(() => {
     if (draft && draftRef.current) draftRef.current.focus();
@@ -143,6 +149,13 @@ export function AffiliateThread({ convId, model, setModel }) {
     try {
       const res = await apiFetch(`/api/affiliate-messages/${id}`);
       if (res.ok) setActive(await res.json());
+    } catch {}
+  }
+
+  async function fetchCrm(id) {
+    try {
+      const res = await apiFetch(`/api/crm/${id}`);
+      if (res?.ok) setCrm(await res.json());
     } catch {}
   }
 
@@ -184,14 +197,6 @@ export function AffiliateThread({ convId, model, setModel }) {
     }
   }
 
-  function timeAgoLocal(ts) {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return 'just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return `${Math.floor(diff / 86400000)}d ago`;
-  }
-
   if (!active) return (
     <div className="empty-state">
       <div className="empty-icon">◈</div>
@@ -201,6 +206,10 @@ export function AffiliateThread({ convId, model, setModel }) {
 
   const selectedModel = MODELS.find(m => m.id === model) || MODELS[0];
 
+  // Merge messages and notes sorted by timestamp
+  const notes = (crm?.notes || []).map(n => ({ ...n, _isNote: true }));
+  const allItems = [...(active.messages || []), ...notes].sort((a, b) => a.ts - b.ts);
+
   return (
     <>
       <div className="thread-header">
@@ -208,24 +217,30 @@ export function AffiliateThread({ convId, model, setModel }) {
           ? <img src={active.avatar} alt={active.creatorName} className="avatar" style={{ borderRadius: '50%', objectFit: 'cover', width: 36, height: 36 }} />
           : <div className="avatar">{active.creatorName?.[0]?.toUpperCase() || '?'}</div>
         }
-        <div>
+        <div style={{ flex: 1 }}>
           <span className="thread-name">{active.creatorName}</span>
           <span className="thread-email" style={{ marginLeft: 8, color: '#888', fontSize: '0.8rem' }}>TikTok Affiliate</span>
         </div>
       </div>
 
+      <CrmThreadPanel convId={convId} crm={crm} onUpdate={setCrm} />
+
       <div className="thread">
-        {active.messages.map((m, i) => (
-          <div key={i} className={`bubble-wrap ${m.role === 'shop' ? 'outbound' : 'inbound'}`}>
-            <div className="bubble">
-              {m.imageUrl
-                ? <img src={m.imageUrl} alt="attachment" style={{ maxWidth: '100%', borderRadius: 8 }} />
-                : <p style={{ whiteSpace: 'pre-wrap' }}>{m.text}</p>
-              }
-              <span className="bubble-time">{timeAgoLocal(m.ts)}</span>
-            </div>
-          </div>
-        ))}
+        {allItems.map((item, i) =>
+          item._isNote
+            ? <NoteMessage key={`note-${item.id}`} note={item} />
+            : (
+              <div key={i} className={`bubble-wrap ${item.role === 'shop' ? 'outbound' : 'inbound'}`}>
+                <div className="bubble">
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt="attachment" style={{ maxWidth: '100%', borderRadius: 8 }} />
+                    : <p style={{ whiteSpace: 'pre-wrap' }}>{item.text}</p>
+                  }
+                  <span className="bubble-time">{timeAgo(item.ts)}</span>
+                </div>
+              </div>
+            )
+        )}
         <div ref={el => { bottomRef.current = el; }} />
       </div>
 
