@@ -84,9 +84,13 @@ export default function ProfitDashboard() {
     try {
       const days = Math.min(90, Math.max(30, daysBetween(range.from, todayKey()) + 1));
       const result = await readJson(await apiFetch('/api/profit/sync', { method: 'POST', body: JSON.stringify({ days }) }));
-      setSyncNote(result.warnings?.length
-        ? { bad: true, text: `Synced with warnings: ${result.warnings.map(w => `${w.source} (${w.error})`).join('; ')}` }
-        : { text: `Synced ${result.counts?.orders ?? 0} orders` });
+      const warnings = [
+        ...(result.warnings || []).map(w => `${w.source} (${w.error})`),
+        ...(result.ads?.error ? [`ad spend (${result.ads.error})`] : []),
+      ];
+      setSyncNote(warnings.length
+        ? { bad: true, text: `Synced with warnings: ${warnings.join('; ')}` }
+        : { text: `Synced ${result.counts?.orders ?? 0} orders${result.ads?.configured ? ` and ad spend for ${result.ads.days} days` : ''}` });
       await load();
     } catch (e) {
       setSyncNote({ bad: true, text: e.message });
@@ -106,6 +110,7 @@ export default function ProfitDashboard() {
             TikTok Shop payout − product cost − ad spend · days in Denver time
             {summary && <> · last synced {timeAgo(summary.lastSync?.at)}</>}
           </p>
+          {summary && <AdsStatus ads={summary.adsSync} />}
         </div>
         <div className="profit-controls">
           <div className="seg">
@@ -148,6 +153,14 @@ export default function ProfitDashboard() {
       {summary && tab === 'costs' && <Costs summary={summary} costs={costs} onChanged={load} />}
     </div>
   );
+}
+
+function AdsStatus({ ads }) {
+  if (!ads?.configured) {
+    return <p className="profit-sub ads-status">Ad spend is entered by hand. Connect TikTok Ads on the server to pull it automatically.</p>;
+  }
+  if (ads.error) return <p className="profit-sub ads-status neg">Ad spend pull failed: {ads.error}</p>;
+  return <p className="profit-sub ads-status">Ad spend is pulled automatically · last pulled {timeAgo(ads.at)}</p>;
 }
 
 /* ---------- Overview ---------- */
