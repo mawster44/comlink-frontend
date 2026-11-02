@@ -1,0 +1,557 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { apiFetch } from './auth.js';
+import './Profit.css';
+
+const TZ = 'America/Denver';
+const PRESETS = [
+  { label: '7D', days: 7 },
+  { label: '14D', days: 14 },
+  { label: '30D', days: 30 },
+  { label: '90D', days: 90 },
+];
+
+const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+
+function shiftDay(ymd, delta) {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
+
+function money(n, { cents = true } = {}) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  const abs = Math.abs(n).toLocaleString('en-US', {
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: cents ? 2 : 0,
+  });
+  return `${n < 0 ? '-' : ''}$${abs}`;
+}
+
+const pct = n => (n === null || n === undefined ? '—' : `${n.toFixed(1)}%`);
+const tone = n => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+const shortDay = ymd => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+function timeAgo(iso) {
+  if (!iso) return 'never';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+async function readJson(res) {
+  if (!res) throw new Error('Signed out');
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  return body;
+}
+
+export default function ProfitDashboard() {
+  const [tab, setTab] = useState('overview');
+  const [range, setRange] = useState(() => ({ from: shiftDay(todayKey(), -29), to: todayKey() }));
+  const [summary, setSummary] = useState(null);
+  const [costs, setCosts] = useState({});
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [s, c] = await Promise.all([
+        readJson(await apiFetch(`/api/profit/summary?from=${range.from}&to=${range.to}`)),
+        readJson(await apiFetch('/api/profit/costs')),
+      ]);
+      setSummary(s);
+      setCosts(c);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [range.from, range.to]);
+
+  useEffect(() => { setLoading(true); load(); }, [load]);
+
+  async function sync() {
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      const days = Math.min(90, Math.max(30, daysBetween(range.from, todayKey()) + 1));
+      const result = await readJson(await apiFetch('/api/profit/sync', { method: 'POST', body: JSON.stringify({ days }) }));
+      setSyncNote(result.warnings?.length
+        ? { bad: true, text: `Synced with warnings: ${result.warnings.map(w => `${w.source} (${w.error})`).join('; ')}` }
+        : { text: `Synced ${result.counts?.orders ?? 0} orders` });
+      await load();
+    } catch (e) {
+      setSyncNote({ bad: true, text: e.message });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const activePreset = PRESETS.find(p => range.to === todayKey() && range.from === shiftDay(todayKey(), -(p.days - 1)));
+
+  return (
+    <div className="profit">
+      <header className="profit-head">
+        <div>
+          <h1>Profit</h1>
+          <p className="profit-sub">
+            TikTok Shop payout − product cost − ad spend · days in Denver time
+            {summary && <> · last synced {timeAgo(summary.lastSync?.at)}</>}
+          </p>
+        </div>
+        <div className="profit-controls">
+          <div className="seg">
+            {PRESETS.map(p => (
+              <button
+                key={p.label}
+                className={activePreset === p ? 'on' : ''}
+                onClick={() => setRange({ from: shiftDay(todayKey(), -(p.days - 1)), to: todayKey() })}
+              >{p.label}</button>
+            ))}
+          </div>
+          <input type="date" value={range.from} max={range.to} onChange={e => e.target.value && setRange(r => ({ ...r, from: e.target.value }))} />
+          <span className="dash">→</span>
+          <input type="date" value={range.to} min={range.from} onChange={e => e.target.value && setRange(r => ({ ...r, to: e.target.value }))} />
+          <button className="primary" onClick={sync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
+        </div>
+      </header>
+
+      {syncNote && <div className={`note ${syncNote.bad ? 'bad' : 'good'}`}>{syncNote.text}</div>}
+      {error && <div className="note bad">{error}</div>}
+
+      <nav className="tabs">
+        {[['overview', 'Overview'], ['orders', 'Orders'], ['costs', 'Costs']].map(([id, label]) => (
+          <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+            {label}
+            {id === 'costs' && summary?.dataQuality.ordersWithMissingCost > 0 && <span className="dot" title="Some SKUs have no cost" />}
+          </button>
+        ))}
+      </nav>
+
+      {loading && !summary && <p className="muted pad">Loading…</p>}
+
+      {summary && tab === 'overview' && <Overview summary={summary} onChanged={load} goCosts={() => setTab('costs')} />}
+      {summary && tab === 'orders' && <Orders range={range} />}
+      {summary && tab === 'costs' && <Costs summary={summary} costs={costs} onChanged={load} />}
+    </div>
+  );
+}
+
+/* ---------- Overview ---------- */
+
+function Overview({ summary, onChanged, goCosts }) {
+  const { totals, daily, bySku, dataQuality: q } = summary;
+  const adShare = totals.profitBeforeAds > 0 ? (totals.adSpend / totals.profitBeforeAds) * 100 : null;
+
+  return (
+    <>
+      <section className="kpis">
+        <Kpi label="Net profit" value={money(totals.netProfit)} cls={tone(totals.netProfit)} big
+          sub={`${pct(totals.marginPct)} of payout`} />
+        <Kpi label="Payout" value={money(totals.payout)} sub={`${money(totals.grossSales, { cents: false })} gross sales`} />
+        <Kpi label="Product cost" value={money(-totals.cogs)} sub={`${totals.units.toLocaleString()} units`} />
+        <Kpi label="Profit before ads" value={money(totals.profitBeforeAds)} cls={tone(totals.profitBeforeAds)} />
+        <Kpi label="Ad spend" value={money(-totals.adSpend)}
+          sub={adShare === null ? null : `${adShare.toFixed(0)}% of pre-ad profit`} />
+        <Kpi label="Orders" value={totals.orders.toLocaleString()}
+          sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
+      </section>
+
+      <Quality q={q} goCosts={goCosts} />
+
+      <section className="card">
+        <h2>Daily net profit <span className="legend"><i className="lg-bar" /> net profit <i className="lg-line" /> ad spend</span></h2>
+        <DailyChart daily={daily} />
+      </section>
+
+      <section className="card">
+        <h2>Daily P&amp;L <span className="hint">click an ad spend amount to edit it</span></h2>
+        <DailyTable daily={daily} onChanged={onChanged} />
+      </section>
+
+      <section className="card">
+        <h2>Products <span className="hint">before ad spend, which isn’t attributed to products</span></h2>
+        <ProductTable rows={bySku} />
+      </section>
+    </>
+  );
+}
+
+function Kpi({ label, value, sub, cls = '', big }) {
+  return (
+    <div className={`kpi ${big ? 'big' : ''}`}>
+      <span className="kpi-label">{label}</span>
+      <span className={`kpi-value ${cls}`}>{value}</span>
+      {sub && <span className="kpi-sub">{sub}</span>}
+    </div>
+  );
+}
+
+function Quality({ q, goCosts }) {
+  const chips = [];
+  if (q.ordersWithMissingCost > 0) chips.push({ bad: true, text: `${q.ordersWithMissingCost} orders have no product cost`, action: goCosts });
+  if (q.pendingOrders > 0) chips.push({ warn: true, text: `${q.pendingOrders} orders awaiting payout (not in profit yet)` });
+  if (q.estimatedOrders > 0) chips.push({ text: `${q.estimatedOrders} payouts are estimates until TikTok settles` });
+  if (q.ordersWithReturns > 0) chips.push({ text: `${q.ordersWithReturns} orders with returns` });
+  if (q.cancelledOrders > 0) chips.push({ text: `${q.cancelledOrders} cancelled excluded` });
+  if (!chips.length) return null;
+  return (
+    <div className="chips">
+      {chips.map(c => (
+        <span key={c.text} className={`chip ${c.bad ? 'bad' : c.warn ? 'warn' : ''}`}>
+          {c.text}
+          {c.action && <button onClick={c.action}>Fix</button>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DailyChart({ daily }) {
+  const [hover, setHover] = useState(null);
+  const W = 900, H = 240, padL = 52, padR = 12, padT = 12, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+
+  const { yMin, yMax, ticks } = useMemo(() => {
+    const vals = daily.flatMap(d => [d.netProfit, d.adSpend, 0]);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const step = niceStep((hi - lo) || 1, 4);
+    lo = Math.floor(lo / step) * step;
+    hi = Math.ceil(hi / step) * step;
+    const t = [];
+    for (let v = lo; v <= hi + step / 2; v += step) t.push(v);
+    return { yMin: lo, yMax: hi, ticks: t };
+  }, [daily]);
+
+  if (!daily.length) return <p className="muted pad">No days in range.</p>;
+
+  const y = v => padT + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
+  const slot = iw / daily.length;
+  const barW = Math.max(2, slot * 0.62);
+  const cx = i => padL + slot * i + slot / 2;
+  const line = daily.map((d, i) => `${i ? 'L' : 'M'}${cx(i)},${y(d.adSpend)}`).join(' ');
+  const labelEvery = Math.ceil(daily.length / 10);
+  const h = hover !== null ? daily[hover] : null;
+
+  return (
+    <div className="chart" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily net profit and ad spend">
+        {ticks.map(t => (
+          <g key={t}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className={t === 0 ? 'zero' : 'grid'} />
+            <text x={padL - 8} y={y(t) + 4} className="axis" textAnchor="end">{money(t, { cents: false })}</text>
+          </g>
+        ))}
+        {daily.map((d, i) => {
+          const top = y(Math.max(d.netProfit, 0)), bottom = y(Math.min(d.netProfit, 0));
+          return (
+            <g key={d.date}>
+              <rect x={cx(i) - barW / 2} y={top} width={barW} height={Math.max(1, bottom - top)} rx="2"
+                className={d.netProfit >= 0 ? 'bar-pos' : 'bar-neg'} opacity={hover === null || hover === i ? 1 : 0.55} />
+              {i % labelEvery === 0 && <text x={cx(i)} y={H - 8} className="axis" textAnchor="middle">{shortDay(d.date)}</text>}
+            </g>
+          );
+        })}
+        <path d={line} className="ad-line" fill="none" />
+        {daily.map((d, i) => <circle key={d.date} cx={cx(i)} cy={y(d.adSpend)} r={hover === i ? 4 : 2.2} className="ad-dot" />)}
+        {daily.map((d, i) => (
+          <rect key={d.date} x={padL + slot * i} y={padT} width={slot} height={ih} fill="transparent"
+            onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} />
+        ))}
+      </svg>
+      {h && (
+        <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+          <strong>{shortDay(h.date)}</strong>
+          <span>Payout <b>{money(h.payout)}</b></span>
+          <span>Cost <b>{money(-h.cogs)}</b></span>
+          <span>Ads <b>{money(-h.adSpend)}</b></span>
+          <span>Net <b className={tone(h.netProfit)}>{money(h.netProfit)}</b></span>
+          <span className="muted">{h.orders} orders{h.pendingOrders ? ` · ${h.pendingOrders} pending` : ''}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function niceStep(range, target) {
+  const raw = range / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const norm = raw / mag;
+  return (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+}
+
+function DailyTable({ daily, onChanged }) {
+  const rows = [...daily].reverse();
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th className="r">Orders</th><th className="r">Units</th><th className="r">Payout</th>
+            <th className="r">Cost</th><th className="r">Before ads</th><th className="r">Ad spend</th>
+            <th className="r">Net profit</th><th className="r">Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(d => (
+            <tr key={d.date}>
+              <td>{shortDay(d.date)}{d.pendingOrders > 0 && <span className="tag warn" title={`${d.pendingOrders} orders awaiting payout`}>{d.pendingOrders} pending</span>}</td>
+              <td className="r">{d.orders}</td>
+              <td className="r">{d.units}</td>
+              <td className="r">{money(d.payout)}</td>
+              <td className="r">{money(-d.cogs)}</td>
+              <td className={`r ${tone(d.profitBeforeAds)}`}>{money(d.profitBeforeAds)}</td>
+              <td className="r"><AdCell date={d.date} amount={d.adSpend} onSaved={onChanged} /></td>
+              <td className={`r strong ${tone(d.netProfit)}`}>{money(d.netProfit)}</td>
+              <td className="r">{pct(d.marginPct)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AdCell({ date, amount, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [err, setErr] = useState(null);
+
+  async function save() {
+    const n = Number(value);
+    if (value.trim() === '' || !Number.isFinite(n) || n < 0) { setEditing(false); return; }
+    if (n === amount) { setEditing(false); return; }
+    try {
+      await readJson(await apiFetch(`/api/profit/ad-spend/${date}`, { method: 'PUT', body: JSON.stringify({ amount: n, note: 'Entered in dashboard' }) }));
+      setErr(null);
+      setEditing(false);
+      await onSaved();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        className="cell-input" autoFocus type="number" min="0" step="0.01" value={value}
+        onFocus={e => e.target.select()}
+        onChange={e => setValue(e.target.value)} onBlur={save}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditing(false); }}
+      />
+    );
+  }
+  return (
+    <button className={`cell-btn ${err ? 'neg' : ''}`} title={err || 'Edit ad spend'} onClick={() => { setValue(amount ? String(amount) : ''); setEditing(true); }}>
+      {amount ? money(-amount) : <span className="muted">add</span>}
+    </button>
+  );
+}
+
+function ProductTable({ rows }) {
+  if (!rows.length) return <p className="muted pad">No settled orders in this range.</p>;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Product</th><th className="r">Units</th><th className="r">Payout</th><th className="r">Cost</th><th className="r">Profit</th><th className="r">Per unit</th><th className="r">Margin</th></tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.sku}>
+              <td>
+                <div className="prod" title={r.productName}>{r.productName}</div>
+                <code>{r.sku}</code>
+              </td>
+              <td className="r">{r.units}</td>
+              <td className="r">{money(r.payout)}</td>
+              <td className="r">{money(-r.cogs)}</td>
+              <td className={`r strong ${tone(r.profit)}`}>{money(r.profit)}</td>
+              <td className={`r ${tone(r.profit)}`}>{r.units ? money(r.profit / r.units) : '—'}</td>
+              <td className="r">{r.payout > 0 ? pct((r.profit / r.payout) * 100) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ---------- Orders ---------- */
+
+const ORDER_LIMIT = 200;
+
+function Orders({ range }) {
+  const [orders, setOrders] = useState(null);
+  const [error, setError] = useState(null);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    setOrders(null);
+    apiFetch(`/api/profit/orders?from=${range.from}&to=${range.to}`)
+      .then(readJson)
+      .then(b => setOrders(b.orders))
+      .catch(e => setError(e.message));
+  }, [range.from, range.to]);
+
+  if (error) return <div className="note bad">{error}</div>;
+  if (!orders) return <p className="muted pad">Loading…</p>;
+
+  const q = query.trim();
+  const filtered = q ? orders.filter(o => o.id.includes(q)) : orders;
+
+  return (
+    <section className="card">
+      <h2>
+        Orders <span className="hint">{filtered.length.toLocaleString()} in range · profit = payout − cost</span>
+        <input className="search" placeholder="Find an order ID" value={query} onChange={e => setQuery(e.target.value)} />
+      </h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Day</th><th>Order</th><th>Status</th><th className="r">Units</th><th className="r">Gross</th><th className="r">Payout</th><th className="r">Cost</th><th className="r">Profit</th></tr>
+          </thead>
+          <tbody>
+            {filtered.slice(0, ORDER_LIMIT).map(o => (
+              <tr key={o.id} className={o.excluded ? 'dim' : ''}>
+                <td>{shortDay(o.day)}</td>
+                <td><code>{o.id}</code>{o.hasReturn && <span className="tag warn">return</span>}</td>
+                <td>{o.excluded ? <span className="tag">{o.status.toLowerCase()}</span> : <span className={`tag ${o.payoutState}`}>{o.payoutState}</span>}</td>
+                <td className="r">{o.units}</td>
+                <td className="r">{money(o.grossSales)}</td>
+                <td className="r">{o.excluded ? '—' : money(o.payout)}</td>
+                <td className="r">{o.excluded ? '—' : o.cogsComplete ? money(-o.cogs) : <span className="tag bad">no cost</span>}</td>
+                <td className={`r strong ${tone(o.profit)}`}>{o.excluded ? '—' : money(o.profit)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {filtered.length > ORDER_LIMIT && <p className="muted pad">Showing the newest {ORDER_LIMIT}. Search by order ID to find others.</p>}
+    </section>
+  );
+}
+
+/* ---------- Costs ---------- */
+
+function currentCost(history, day) {
+  let hit = null;
+  for (const e of history) if (e.from <= day) hit = e;
+  return hit;
+}
+
+function Costs({ summary, costs, onChanged }) {
+  const unmatched = Object.entries(summary.dataQuality.unmatchedSkus);
+  const names = useMemo(() => Object.fromEntries(summary.bySku.map(s => [s.sku, s.productName])), [summary.bySku]);
+  const [form, setForm] = useState({ sku: '', cost: '', from: '' });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const today = todayKey();
+  const skus = Object.keys(costs);
+
+  async function save(e) {
+    e.preventDefault();
+    setError(null);
+    const cost = Number(form.cost);
+    if (!form.sku.trim() || form.cost === '' || !Number.isFinite(cost) || cost < 0) { setError('Enter a SKU and a cost of $0 or more.'); return; }
+    setBusy(true);
+    try {
+      await readJson(await apiFetch(`/api/profit/costs/${encodeURIComponent(form.sku.trim())}`, {
+        method: 'PUT',
+        body: JSON.stringify({ cost, ...(form.from ? { from: form.from } : {}) }),
+      }));
+      setForm({ sku: '', cost: '', from: '' });
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(sku, from) {
+    if (!window.confirm(`Remove the ${from === '2000-01-01' ? 'base' : from} cost entry for ${sku}?`)) return;
+    try {
+      await readJson(await apiFetch(`/api/profit/costs/${encodeURIComponent(sku)}?from=${from}`, { method: 'DELETE' }));
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <>
+      {unmatched.length > 0 && (
+        <section className="card alert">
+          <h2>Needs a cost</h2>
+          <p className="muted">Orders with these SKUs are being counted at $0 cost, which overstates profit.</p>
+          <ul className="plain">
+            {unmatched.map(([sku, name]) => (
+              <li key={sku}>
+                <div><div className="prod" title={name}>{name}</div><code>{sku}</code></div>
+                <button className="primary small" onClick={() => setForm(f => ({ ...f, sku }))}>Set cost</button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="card">
+        <h2>Add or change a cost <span className="hint">each order is priced at the cost in effect on its order date</span></h2>
+        <form className="cost-form" onSubmit={save}>
+          <label>SKU
+            <input list="known-skus" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. 7LB02052025" />
+            <datalist id="known-skus">{[...new Set([...skus, ...unmatched.map(([s]) => s)])].map(s => <option key={s} value={s} />)}</datalist>
+          </label>
+          <label>Unit cost (incl. shipping)
+            <input type="number" min="0" step="0.01" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0.00" />
+          </label>
+          <label>Effective from
+            <input type="date" value={form.from} onChange={e => setForm(f => ({ ...f, from: e.target.value }))} />
+          </label>
+          <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save cost'}</button>
+        </form>
+        <p className="muted">
+          {form.from
+            ? `Orders from ${form.from} onward use this cost. Earlier orders keep their previous cost.`
+            : 'Leave the date empty to use this cost for every order that doesn’t have an earlier dated entry (the base cost).'}
+        </p>
+        {error && <div className="note bad">{error}</div>}
+      </section>
+
+      <section className="card">
+        <h2>Cost history</h2>
+        {!skus.length && <p className="muted pad">No costs entered yet.</p>}
+        {skus.map(sku => {
+          const history = costs[sku];
+          const now = currentCost(history, today);
+          return (
+            <div key={sku} className="sku-block">
+              <div className="sku-head">
+                <div><div className="prod" title={names[sku]}>{names[sku] || 'Not sold in this date range'}</div><code>{sku}</code></div>
+                <div className="sku-now">{now ? money(now.cost) : '—'}<span>now</span></div>
+              </div>
+              <ul className="history">
+                {history.map(e => (
+                  <li key={e.from} className={now === e ? 'current' : ''}>
+                    <span>{e.from === '2000-01-01' ? 'Base cost' : `From ${e.from}`}</span>
+                    <b>{money(e.cost)}</b>
+                    {e.from > today && <span className="tag">scheduled</span>}
+                    <button className="x" title="Remove this entry" onClick={() => remove(sku, e.from)}>×</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </section>
+    </>
+  );
+}

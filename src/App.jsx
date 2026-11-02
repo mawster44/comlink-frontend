@@ -3,6 +3,7 @@ import Settings from './Settings.jsx';
 import BrandBrain from './BrandBrain.jsx';
 import { AffiliateList, AffiliateThread } from './AffiliateInbox.jsx';
 import { CrmListMeta, CrmThreadPanel, NoteMessage } from './CrmTools.jsx';
+import ProfitDashboard from './ProfitDashboard.jsx';
 import { apiFetch, clearToken } from './auth.js';
 import './App.css';
 
@@ -34,7 +35,7 @@ export default function App({ user, onLogout }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(window.location.pathname === '/settings');
   const [showBrandBrain, setShowBrandBrain] = useState(false);
-  const [view, setView] = useState('customers'); // 'customers' | 'affiliates'
+  const [view, setView] = useState('customers'); // 'customers' | 'affiliates' | 'profit' (admin only)
   const [affiliateActiveId, setAffiliateActiveId] = useState(null);
   const [crmData, setCrmData] = useState({});
   const [activeCrm, setActiveCrm] = useState(null);
@@ -172,6 +173,14 @@ export default function App({ user, onLogout }) {
           >
             Affiliates
           </button>
+          {user?.role === 'admin' && (
+            <button
+              className={`toggle-btn ${view === 'profit' ? 'active' : ''}`}
+              onClick={() => setView('profit')}
+            >
+              Profit
+            </button>
+          )}
         </div>
 
         {view === 'customers' && (
@@ -203,6 +212,10 @@ export default function App({ user, onLogout }) {
           </div>
         )}
 
+        {view === 'profit' && (
+          <p className="empty" style={{ padding: 16 }}>Profit is TikTok Shop payouts minus product cost and ad spend. Admin only.</p>
+        )}
+
         {view === 'affiliates' && (
           <AffiliateList
             activeId={affiliateActiveId}
@@ -217,6 +230,7 @@ export default function App({ user, onLogout }) {
             ? <AffiliateThread convId={affiliateActiveId} model={model} setModel={setModel} />
             : <div className="empty-state"><div className="empty-icon">◈</div><p>Select an affiliate conversation</p></div>
         )}
+        {view === 'profit' && user?.role === 'admin' && <ProfitDashboard />}
         {view === 'customers' && !active ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
