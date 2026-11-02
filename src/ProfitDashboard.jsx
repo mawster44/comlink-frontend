@@ -157,7 +157,7 @@ export default function ProfitDashboard() {
 
 function AdsStatus({ ads }) {
   if (!ads?.configured) {
-    return <p className="profit-sub ads-status">Ad spend is entered by hand. Connect TikTok Ads on the server to pull it automatically.</p>;
+    return <p className="profit-sub ads-status">Ad spend is entered by hand. Connect TikTok Ads in Settings to pull it automatically.</p>;
   }
   if (ads.error) return <p className="profit-sub ads-status neg">Ad spend pull failed: {ads.error}</p>;
   return <p className="profit-sub ads-status">Ad spend is pulled automatically · last pulled {timeAgo(ads.at)}</p>;

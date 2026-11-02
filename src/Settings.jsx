@@ -23,6 +23,7 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
   const [savingAffiliateSlack, setSavingAffiliateSlack] = useState(false);
   const [testingAffiliateSlack, setTestingAffiliateSlack] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  const [ads, setAds] = useState(null); // TikTok Ads (ad spend for the profit dashboard), admin only
 
   // Team management
   const [teamMembers, setTeamMembers] = useState([]);
@@ -42,10 +43,11 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
     fetchGmailStatus();
     fetchSlackStatus();
     fetchAffiliateSlackStatus();
-    if (user?.role === 'admin') fetchTeam();
+    if (user?.role === 'admin') { fetchTeam(); fetchAds(); }
 
     const params = new URLSearchParams(window.location.search);
     const tiktokResult = params.get('tiktok');
+    const adsResult = params.get('tiktokAds');
     const gmailResult = params.get('gmail');
 
     if (tiktokResult === 'success') { showToast('TikTok Shop connected successfully! ✓'); fetchTiktokStatus(); }
@@ -53,8 +55,34 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
     if (gmailResult  === 'success') { showToast('Gmail connected successfully! ✓'); fetchGmailStatus(); }
     if (gmailResult  === 'error')   { showToast('Gmail connection failed. Please try again.', true); }
 
-    if (tiktokResult || gmailResult) window.history.replaceState({}, '', '/settings');
+    if (adsResult === 'success') { showToast('TikTok Ads connected successfully! ✓'); fetchAds(); }
+    if (adsResult === 'error')   { showToast('TikTok Ads connection failed. Please try again.', true); }
+
+    if (tiktokResult || gmailResult || adsResult) window.history.replaceState({}, '', '/settings');
   }, []);
+
+  async function fetchAds() {
+    try {
+      const res = await apiFetch('/api/profit/ads-connection');
+      if (res?.ok) setAds(await res.json());
+    } catch {}
+  }
+
+  async function connectAds() {
+    try {
+      const res = await apiFetch('/api/profit/ads-connect', { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      window.location.href = body.url;
+    } catch (e) {
+      showToast(e.message || 'Could not start the TikTok Ads connection.', true);
+    }
+  }
+
+  async function disconnectAds() {
+    await apiFetch('/api/profit/ads-disconnect', { method: 'POST' });
+    fetchAds();
+  }
 
   async function fetchTiktokStatus() {
     try { setTiktok(await (await fetch(`${API_BASE}/auth/status`)).json()); } catch {}
@@ -238,6 +266,31 @@ export default function Settings({ model, setModel, systemPrompt, setSystemPromp
                 : <a className="btn-connect" href={`${API_BASE}/auth/tiktok`}>Connect</a>}
             </div>
           </div>
+
+          {/* TikTok Ads: read-only ad spend for the profit dashboard */}
+          {user?.role === 'admin' && ads && (
+            <div className="integration-card" style={{ marginTop: 10 }}>
+              <div className="integration-icon tiktok-icon">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.18 8.18 0 004.78 1.52V6.76a4.85 4.85 0 01-1.01-.07z"/>
+                </svg>
+              </div>
+              <div className="integration-info">
+                <div className="integration-name">TikTok Ads</div>
+                <div className={`integration-status ${ads.connected ? 'connected' : 'disconnected'}`}>
+                  <span className="status-dot" />
+                  {ads.connected
+                    ? 'Connected · ad spend feeds the profit dashboard'
+                    : ads.appConfigured ? 'Not connected' : 'Waiting for the TikTok app to be approved'}
+                </div>
+              </div>
+              <div className="integration-action">
+                {ads.connected
+                  ? (ads.source === 'oauth' && <button className="btn-disconnect" onClick={disconnectAds}>Disconnect</button>)
+                  : <button className="btn-connect" onClick={connectAds} disabled={!ads.appConfigured} style={ads.appConfigured ? undefined : { opacity: 0.4, cursor: 'default' }}>Connect</button>}
+              </div>
+            </div>
+          )}
 
           {/* Gmail */}
           <div className="integration-card" style={{ marginTop: 10 }}>
