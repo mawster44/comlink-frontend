@@ -123,6 +123,15 @@ td > .tag:first-child { margin-left: 0; }
 .tag.estimated { background: rgba(37, 244, 238, 0.12); color: var(--accent2); }
 .tag.settled { background: rgba(61, 220, 151, 0.12); color: var(--good); }
 .tag.bad { background: rgba(254, 44, 85, 0.15); color: var(--accent); margin-left: 0; }
+.tag.free { background: rgba(180, 140, 255, 0.16); color: #b48cff; }
+h2 > .tag { margin-left: 0; }
+
+.free-card { border-left: 3px solid #b48cff; }
+.free-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 10px; }
+@media (max-width: 1100px) { .free-grid { grid-template-columns: repeat(2, 1fr); } }
+.free-grid > div { display: flex; flex-direction: column; gap: 4px; }
+.profit button.link { background: none; border: none; color: var(--accent2); font-size: 12px; font-weight: 600; padding: 0; margin-left: auto; }
+.profit button.link:hover { text-decoration: underline; }
 
 .cell-btn { background: none; border: 1px dashed transparent; border-radius: 6px; color: inherit; font: inherit; padding: 2px 6px; }
 .cell-btn:hover { border-color: var(--border); background: var(--surface2); }

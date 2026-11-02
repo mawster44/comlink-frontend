@@ -51,6 +51,7 @@ async function readJson(res) {
 
 export default function ProfitDashboard() {
   const [tab, setTab] = useState('overview');
+  const [freeOnly, setFreeOnly] = useState(false);
   const [range, setRange] = useState(() => ({ from: shiftDay(todayKey(), -29), to: todayKey() }));
   const [summary, setSummary] = useState(null);
   const [costs, setCosts] = useState({});
@@ -137,8 +138,13 @@ export default function ProfitDashboard() {
 
       {loading && !summary && <p className="muted pad">Loading…</p>}
 
-      {summary && tab === 'overview' && <Overview summary={summary} onChanged={load} goCosts={() => setTab('costs')} />}
-      {summary && tab === 'orders' && <Orders range={range} />}
+      {summary && tab === 'overview' && (
+        <Overview
+          summary={summary} onChanged={load} goCosts={() => setTab('costs')}
+          goFree={() => { setFreeOnly(true); setTab('orders'); }}
+        />
+      )}
+      {summary && tab === 'orders' && <Orders range={range} freeOnly={freeOnly} setFreeOnly={setFreeOnly} />}
       {summary && tab === 'costs' && <Costs summary={summary} costs={costs} onChanged={load} />}
     </div>
   );
@@ -146,8 +152,8 @@ export default function ProfitDashboard() {
 
 /* ---------- Overview ---------- */
 
-function Overview({ summary, onChanged, goCosts }) {
-  const { totals, daily, bySku, dataQuality: q } = summary;
+function Overview({ summary, onChanged, goCosts, goFree }) {
+  const { totals, daily, bySku, dataQuality: q, free } = summary;
   const adShare = totals.profitBeforeAds > 0 ? (totals.adSpend / totals.profitBeforeAds) * 100 : null;
 
   return (
@@ -165,6 +171,8 @@ function Overview({ summary, onChanged, goCosts }) {
       </section>
 
       <Quality q={q} goCosts={goCosts} />
+
+      <FreeOrders free={free} totals={totals} goFree={goFree} />
 
       <section className="card">
         <h2>Daily net profit <span className="legend"><i className="lg-bar" /> net profit <i className="lg-line" /> ad spend</span></h2>
@@ -211,6 +219,32 @@ function Quality({ q, goCosts }) {
         </span>
       ))}
     </div>
+  );
+}
+
+// $0 orders (creator samples, giveaways): already inside every total above, called out so their cost is visible on its own.
+function FreeOrders({ free, totals, goFree }) {
+  if (!free || free.orders === 0) return null;
+  const shippingAndFees = -free.payout; // free orders pay out nothing, so this is what TikTok charged for shipping and fees
+  const paidOnly = totals.profitBeforeAds - free.netImpact;
+  return (
+    <section className="card free-card">
+      <h2>
+        Free orders
+        <span className="tag free">{free.orders.toLocaleString()} orders · {free.units.toLocaleString()} units</span>
+        <button className="link" onClick={goFree}>View them</button>
+      </h2>
+      <div className="free-grid">
+        <div><span className="kpi-label">Net cost</span><span className="kpi-value neg">{money(free.netImpact)}</span></div>
+        <div><span className="kpi-label">Product given away</span><span className="kpi-value">{money(-free.cogs)}</span></div>
+        <div><span className="kpi-label">Shipping &amp; fees</span><span className="kpi-value">{money(-Math.max(0, shippingAndFees))}</span></div>
+        <div><span className="kpi-label">Profit before ads, paid orders only</span><span className={`kpi-value ${tone(paidOnly)}`}>{money(paidOnly)}</span></div>
+      </div>
+      <p className="muted">
+        Orders with a $0 total.{free.flaggedSample > 0 ? ` TikTok flags ${free.flaggedSample} of them as creator samples.` : ''}
+        {free.pending > 0 ? ` ${free.pending} still awaiting payout aren’t in these figures.` : ''}
+      </p>
+    </section>
   );
 }
 
@@ -388,7 +422,7 @@ function ProductTable({ rows }) {
 
 const ORDER_LIMIT = 200;
 
-function Orders({ range }) {
+function Orders({ range, freeOnly, setFreeOnly }) {
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
@@ -405,12 +439,16 @@ function Orders({ range }) {
   if (!orders) return <p className="muted pad">Loading…</p>;
 
   const q = query.trim();
-  const filtered = q ? orders.filter(o => o.id.includes(q)) : orders;
+  const filtered = orders.filter(o => (!freeOnly || o.free) && (!q || o.id.includes(q)));
 
   return (
     <section className="card">
       <h2>
-        Orders <span className="hint">{filtered.length.toLocaleString()} in range · profit = payout − cost</span>
+        Orders <span className="hint">{filtered.length.toLocaleString()} shown · profit = payout − cost</span>
+        <span className="seg">
+          <button className={freeOnly ? '' : 'on'} onClick={() => setFreeOnly(false)}>All</button>
+          <button className={freeOnly ? 'on' : ''} onClick={() => setFreeOnly(true)}>Free only</button>
+        </span>
         <input className="search" placeholder="Find an order ID" value={query} onChange={e => setQuery(e.target.value)} />
       </h2>
       <div className="table-wrap">
@@ -423,7 +461,10 @@ function Orders({ range }) {
               <tr key={o.id} className={o.excluded ? 'dim' : ''}>
                 <td>{shortDay(o.day)}</td>
                 <td><code>{o.id}</code>{o.hasReturn && <span className="tag warn">return</span>}</td>
-                <td>{o.excluded ? <span className="tag">{o.status.toLowerCase()}</span> : <span className={`tag ${o.payoutState}`}>{o.payoutState}</span>}</td>
+                <td>
+                  {o.excluded ? <span className="tag">{o.status.toLowerCase()}</span> : <span className={`tag ${o.payoutState}`}>{o.payoutState}</span>}
+                  {o.free && <span className="tag free" title={o.sample ? 'TikTok flags this as a creator sample' : '$0 order'}>{o.sample ? 'sample' : 'free'}</span>}
+                </td>
                 <td className="r">{o.units}</td>
                 <td className="r">{money(o.grossSales)}</td>
                 <td className="r">{o.excluded ? '—' : money(o.payout)}</td>
