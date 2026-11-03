@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from './auth.js';
 import { todayKey, shiftDay, daysBetween, money, pct, tone, shortDay, timeAgo, readJson } from './profitFormat.js';
 import PriceTest from './PriceTest.jsx';
+import McfActuals from './McfActuals.jsx';
 import './Profit.css';
 
 const PRESETS = [
@@ -18,6 +19,7 @@ export default function ProfitDashboard() {
   const [summary, setSummary] = useState(null);
   const [costs, setCosts] = useState({});
   const [mcfFees, setMcfFees] = useState({});
+  const [mcfActuals, setMcfActuals] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -26,14 +28,16 @@ export default function ProfitDashboard() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [s, c, m] = await Promise.all([
+      const [s, c, m, a] = await Promise.all([
         readJson(await apiFetch(`/api/profit/summary?from=${range.from}&to=${range.to}`)),
         readJson(await apiFetch('/api/profit/costs')),
         readJson(await apiFetch('/api/profit/mcf-fees')),
+        readJson(await apiFetch('/api/profit/mcf-actuals')),
       ]);
       setSummary(s);
       setCosts(c);
       setMcfFees(m);
+      setMcfActuals(a);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -117,7 +121,7 @@ export default function ProfitDashboard() {
       )}
       {summary && tab === 'orders' && <Orders range={range} filter={orderFilter} setFilter={setOrderFilter} />}
       {summary && tab === 'pricing' && <PriceTest range={range} summary={summary} />}
-      {summary && tab === 'costs' && <Costs summary={summary} costs={costs} mcfFees={mcfFees} onChanged={load} />}
+      {summary && tab === 'costs' && <Costs summary={summary} costs={costs} mcfFees={mcfFees} mcfActuals={mcfActuals} onChanged={load} />}
     </div>
   );
 }
@@ -251,7 +255,13 @@ function Fulfillment({ fulfillment, q, goSeller, goCosts }) {
       <div className="free-grid">
         <div><span className="kpi-label">Shipped by TikTok label</span><span className="kpi-value">{tiktok.orders.toLocaleString()}</span></div>
         <div><span className="kpi-label">Seller-shipped (MCF)</span><span className="kpi-value">{seller.orders.toLocaleString()}</span></div>
-        <div><span className="kpi-label">Estimated MCF fees</span><span className="kpi-value">{money(-seller.mcfFees)}</span></div>
+        <div>
+          <span className="kpi-label">{seller.allocatedFees > 0 && seller.allocatedFees >= seller.mcfFees ? 'MCF fees (Amazon actual)' : 'Estimated MCF fees'}</span>
+          <span className="kpi-value">{money(-seller.mcfFees)}</span>
+          {seller.allocatedFees > 0 && seller.allocatedFees < seller.mcfFees && (
+            <span className="kpi-sub">{money(seller.allocatedFees)} from Amazon actuals, rest estimated</span>
+          )}
+        </div>
         <div><span className="kpi-label">Not labelled yet</span><span className="kpi-value">{unknown.orders.toLocaleString()}</span></div>
       </div>
       <p className="muted">
@@ -560,7 +570,7 @@ const KINDS = {
 
 const BLANK_FORM = { sku: '', cost: '', from: '' };
 
-function Costs({ summary, costs, mcfFees, onChanged }) {
+function Costs({ summary, costs, mcfFees, mcfActuals, onChanged }) {
   const unmatched = Object.entries(summary.dataQuality.unmatchedSkus);
   const names = useMemo(() => Object.fromEntries(summary.bySku.map(s => [s.sku, s.productName])), [summary.bySku]);
   const [forms, setForms] = useState({ costs: BLANK_FORM, mcf: BLANK_FORM });
@@ -627,6 +637,13 @@ function Costs({ summary, costs, mcfFees, onChanged }) {
           busy={busy === kind} onSave={e => save(kind, e)} onRemove={(sku, from) => remove(kind, sku, from)}
         />
       ))}
+
+      <McfActuals
+        allocations={mcfActuals}
+        skus={summary.bySku.filter(s => s.sku && s.sku !== '(no sku)').map(s => ({ sku: s.sku, productName: s.productName }))}
+        range={summary.range}
+        onChanged={onChanged}
+      />
     </>
   );
 }

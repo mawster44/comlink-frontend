@@ -169,3 +169,9 @@ h2 > .tag { margin-left: 0; }
 .verdict p { margin: 4px 0; font-size: 13px; }
 .verdict p.pos { color: var(--good); }
 .verdict p.neg { color: var(--accent); }
+
+.profit button.link.inline { margin-left: 0; }
+.actual-side { display: flex; align-items: flex-start; gap: 12px; }
+.sku-block > .muted { margin-top: 6px; }
+.actual-side .x { background: none; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 4px; }
+.actual-side .x:hover { color: var(--accent); }
