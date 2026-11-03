@@ -51,10 +51,11 @@ async function readJson(res) {
 
 export default function ProfitDashboard() {
   const [tab, setTab] = useState('overview');
-  const [freeOnly, setFreeOnly] = useState(false);
+  const [orderFilter, setOrderFilter] = useState('all'); // all | free | seller
   const [range, setRange] = useState(() => ({ from: shiftDay(todayKey(), -29), to: todayKey() }));
   const [summary, setSummary] = useState(null);
   const [costs, setCosts] = useState({});
+  const [mcfFees, setMcfFees] = useState({});
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -63,12 +64,14 @@ export default function ProfitDashboard() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [s, c] = await Promise.all([
+      const [s, c, m] = await Promise.all([
         readJson(await apiFetch(`/api/profit/summary?from=${range.from}&to=${range.to}`)),
         readJson(await apiFetch('/api/profit/costs')),
+        readJson(await apiFetch('/api/profit/mcf-fees')),
       ]);
       setSummary(s);
       setCosts(c);
+      setMcfFees(m);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -107,7 +110,7 @@ export default function ProfitDashboard() {
         <div>
           <h1>Profit</h1>
           <p className="profit-sub">
-            TikTok Shop payout − product cost − ad spend · days in Denver time
+            TikTok Shop payout − product cost − MCF fees − ad spend · days in Denver time
             {summary && <> · last synced {timeAgo(summary.lastSync?.at)}</>}
           </p>
           {summary && <AdsStatus ads={summary.adsSync} />}
@@ -136,7 +139,7 @@ export default function ProfitDashboard() {
         {[['overview', 'Overview'], ['orders', 'Orders'], ['costs', 'Costs']].map(([id, label]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             {label}
-            {id === 'costs' && summary?.dataQuality.ordersWithMissingCost > 0 && <span className="dot" title="Some SKUs have no cost" />}
+            {id === 'costs' && summary && (summary.dataQuality.ordersWithMissingCost > 0 || summary.dataQuality.sellerShippedMissingMcfFee > 0) && <span className="dot" title="Some SKUs have no cost or MCF fee" />}
           </button>
         ))}
       </nav>
@@ -146,11 +149,12 @@ export default function ProfitDashboard() {
       {summary && tab === 'overview' && (
         <Overview
           summary={summary} onChanged={load} goCosts={() => setTab('costs')}
-          goFree={() => { setFreeOnly(true); setTab('orders'); }}
+          goFree={() => { setOrderFilter('free'); setTab('orders'); }}
+          goSeller={() => { setOrderFilter('seller'); setTab('orders'); }}
         />
       )}
-      {summary && tab === 'orders' && <Orders range={range} freeOnly={freeOnly} setFreeOnly={setFreeOnly} />}
-      {summary && tab === 'costs' && <Costs summary={summary} costs={costs} onChanged={load} />}
+      {summary && tab === 'orders' && <Orders range={range} filter={orderFilter} setFilter={setOrderFilter} />}
+      {summary && tab === 'costs' && <Costs summary={summary} costs={costs} mcfFees={mcfFees} onChanged={load} />}
     </div>
   );
 }
@@ -165,8 +169,8 @@ function AdsStatus({ ads }) {
 
 /* ---------- Overview ---------- */
 
-function Overview({ summary, onChanged, goCosts, goFree }) {
-  const { totals, daily, bySku, dataQuality: q, free } = summary;
+function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
+  const { totals, daily, bySku, dataQuality: q, free, fulfillment } = summary;
   const adShare = totals.profitBeforeAds > 0 ? (totals.adSpend / totals.profitBeforeAds) * 100 : null;
 
   return (
@@ -175,7 +179,8 @@ function Overview({ summary, onChanged, goCosts, goFree }) {
         <Kpi label="Net profit" value={money(totals.netProfit)} cls={tone(totals.netProfit)} big
           sub={`${pct(totals.marginPct)} of payout`} />
         <Kpi label="Payout" value={money(totals.payout)} sub={`${money(totals.grossSales, { cents: false })} gross sales`} />
-        <Kpi label="Product cost" value={money(-totals.cogs)} sub={`${totals.units.toLocaleString()} units`} />
+        <Kpi label="Product cost" value={money(-totals.cogs)}
+          sub={`${totals.units.toLocaleString()} units${totals.mcfFees > 0 ? ` · plus ${money(totals.mcfFees, { cents: false })} MCF` : ''}`} />
         <Kpi label="Profit before ads" value={money(totals.profitBeforeAds)} cls={tone(totals.profitBeforeAds)} />
         <Kpi label="Ad spend" value={money(-totals.adSpend)}
           sub={adShare === null ? null : `${adShare.toFixed(0)}% of pre-ad profit`} />
@@ -186,6 +191,8 @@ function Overview({ summary, onChanged, goCosts, goFree }) {
       <Quality q={q} goCosts={goCosts} />
 
       <FreeOrders free={free} totals={totals} goFree={goFree} />
+
+      <Fulfillment fulfillment={fulfillment} q={q} goSeller={goSeller} goCosts={goCosts} />
 
       <section className="card">
         <h2>Daily net profit <span className="legend"><i className="lg-bar" /> net profit <i className="lg-line" /> ad spend</span></h2>
@@ -218,6 +225,7 @@ function Kpi({ label, value, sub, cls = '', big }) {
 function Quality({ q, goCosts }) {
   const chips = [];
   if (q.ordersWithMissingCost > 0) chips.push({ bad: true, text: `${q.ordersWithMissingCost} orders have no product cost`, action: goCosts });
+  if (q.sellerShippedMissingMcfFee > 0) chips.push({ bad: true, text: `${q.sellerShippedMissingMcfFee} seller-shipped orders have no MCF fee`, action: goCosts });
   if (q.pendingOrders > 0) chips.push({ warn: true, text: `${q.pendingOrders} orders awaiting payout (not in profit yet)` });
   if (q.estimatedOrders > 0) chips.push({ text: `${q.estimatedOrders} payouts are estimates until TikTok settles` });
   if (q.ordersWithReturns > 0) chips.push({ text: `${q.ordersWithReturns} orders with returns` });
@@ -238,7 +246,8 @@ function Quality({ q, goCosts }) {
 // $0 orders (creator samples, giveaways): already inside every total above, called out so their cost is visible on its own.
 function FreeOrders({ free, totals, goFree }) {
   if (!free || free.orders === 0) return null;
-  const shippingAndFees = -free.payout; // free orders pay out nothing, so this is what TikTok charged for shipping and fees
+  // Free orders pay out nothing, so this is what TikTok charged for shipping and fees, plus any estimated MCF fee.
+  const shippingAndFees = -free.payout + free.mcfFee;
   const paidOnly = totals.profitBeforeAds - free.netImpact;
   return (
     <section className="card free-card">
@@ -257,6 +266,51 @@ function FreeOrders({ free, totals, goFree }) {
         Orders with a $0 total.{free.flaggedSample > 0 ? ` TikTok flags ${free.flaggedSample} of them as creator samples.` : ''}
         {free.pending > 0 ? ` ${free.pending} still awaiting payout aren’t in these figures.` : ''}
       </p>
+    </section>
+  );
+}
+
+// Orders the seller ships themselves (e.g. through Amazon MCF) carry no TikTok label cost; their carrier fee is billed on the Amazon account.
+function Fulfillment({ fulfillment, q, goSeller, goCosts }) {
+  if (!fulfillment) return null;
+  const { seller, tiktok, unknown, combos } = fulfillment;
+  const total = seller.orders + tiktok.orders + unknown.orders;
+  if (total === 0) return null;
+  const share = (seller.orders / total) * 100;
+  const rows = Object.entries(combos).sort((a, b) => b[1].orders - a[1].orders);
+  return (
+    <section className="card seller-card">
+      <h2>
+        Shipping method
+        <span className="tag seller">{seller.orders.toLocaleString()} seller-shipped · {share.toFixed(0)}%</span>
+        {seller.orders > 0 && <button className="link" onClick={goSeller}>View them</button>}
+      </h2>
+      <div className="free-grid">
+        <div><span className="kpi-label">Shipped by TikTok label</span><span className="kpi-value">{tiktok.orders.toLocaleString()}</span></div>
+        <div><span className="kpi-label">Seller-shipped (MCF)</span><span className="kpi-value">{seller.orders.toLocaleString()}</span></div>
+        <div><span className="kpi-label">Estimated MCF fees</span><span className="kpi-value">{money(-seller.mcfFees)}</span></div>
+        <div><span className="kpi-label">Not labelled yet</span><span className="kpi-value">{unknown.orders.toLocaleString()}</span></div>
+      </div>
+      <p className="muted">
+        TikTok’s payout already includes the shipping label on orders it ships. Seller-shipped orders have no label cost there, so
+        their fulfillment fee is an estimate from the per-unit MCF fee on the Costs tab, not Amazon’s actual charge.
+        {unknown.orders > 0 && ' Orders marked “not labelled” were synced before this existed; Sync now refreshes them.'}
+        {q.sellerShippedMissingMcfFee > 0 && <> {q.sellerShippedMissingMcfFee} seller-shipped orders have no fee set yet. <button className="link" onClick={goCosts}>Set MCF fees</button></>}
+      </p>
+      <details className="muted">
+        <summary>How orders were classified</summary>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>TikTok fulfillment / shipping type</th><th className="r">Orders</th><th className="r">Settled</th><th className="r">Settled with no TikTok shipping charge</th></tr></thead>
+            <tbody>
+              {rows.map(([name, c]) => (
+                <tr key={name}><td><code>{name}</code></td><td className="r">{c.orders}</td><td className="r">{c.settled}</td><td className="r">{c.noTiktokShipping}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p>“Seller-shipped” means TikTok reports <code>SELLER</code> as the shipping type. Paid orders with no TikTok shipping charge should line up with it.</p>
+      </details>
     </section>
   );
 }
@@ -353,7 +407,7 @@ function DailyTable({ daily, onChanged }) {
               <td className="r">{d.orders}</td>
               <td className="r">{d.units}</td>
               <td className="r">{money(d.payout)}</td>
-              <td className="r">{money(-d.cogs)}</td>
+              <td className="r" title={d.mcfFees > 0 ? `${money(d.cogs)} product + ${money(d.mcfFees)} MCF` : undefined}>{money(-(d.cogs + d.mcfFees))}</td>
               <td className={`r ${tone(d.profitBeforeAds)}`}>{money(d.profitBeforeAds)}</td>
               <td className="r"><AdCell date={d.date} amount={d.adSpend} onSaved={onChanged} /></td>
               <td className={`r strong ${tone(d.netProfit)}`}>{money(d.netProfit)}</td>
@@ -419,7 +473,7 @@ function ProductTable({ rows }) {
               </td>
               <td className="r">{r.units}</td>
               <td className="r">{money(r.payout)}</td>
-              <td className="r">{money(-r.cogs)}</td>
+              <td className="r" title={r.mcfFees > 0 ? `${money(r.cogs)} product + ${money(r.mcfFees)} MCF` : undefined}>{money(-(r.cogs + r.mcfFees))}</td>
               <td className={`r strong ${tone(r.profit)}`}>{money(r.profit)}</td>
               <td className={`r ${tone(r.profit)}`}>{r.units ? money(r.profit / r.units) : '—'}</td>
               <td className="r">{r.payout > 0 ? pct((r.profit / r.payout) * 100) : '—'}</td>
@@ -435,7 +489,13 @@ function ProductTable({ rows }) {
 
 const ORDER_LIMIT = 200;
 
-function Orders({ range, freeOnly, setFreeOnly }) {
+const ORDER_FILTERS = [
+  ['all', 'All', () => true],
+  ['free', 'Free only', o => o.free],
+  ['seller', 'Seller-shipped', o => o.fulfillment === 'seller'],
+];
+
+function Orders({ range, filter, setFilter }) {
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
@@ -452,15 +512,17 @@ function Orders({ range, freeOnly, setFreeOnly }) {
   if (!orders) return <p className="muted pad">Loading…</p>;
 
   const q = query.trim();
-  const filtered = orders.filter(o => (!freeOnly || o.free) && (!q || o.id.includes(q)));
+  const keep = ORDER_FILTERS.find(([id]) => id === filter)[2];
+  const filtered = orders.filter(o => keep(o) && (!q || o.id.includes(q)));
 
   return (
     <section className="card">
       <h2>
         Orders <span className="hint">{filtered.length.toLocaleString()} shown · profit = payout − cost</span>
         <span className="seg">
-          <button className={freeOnly ? '' : 'on'} onClick={() => setFreeOnly(false)}>All</button>
-          <button className={freeOnly ? 'on' : ''} onClick={() => setFreeOnly(true)}>Free only</button>
+          {ORDER_FILTERS.map(([id, label]) => (
+            <button key={id} className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>{label}</button>
+          ))}
         </span>
         <input className="search" placeholder="Find an order ID" value={query} onChange={e => setQuery(e.target.value)} />
       </h2>
@@ -477,11 +539,17 @@ function Orders({ range, freeOnly, setFreeOnly }) {
                 <td>
                   {o.excluded ? <span className="tag">{o.status.toLowerCase()}</span> : <span className={`tag ${o.payoutState}`}>{o.payoutState}</span>}
                   {o.free && <span className="tag free" title={o.sample ? 'TikTok flags this as a creator sample' : '$0 order'}>{o.sample ? 'sample' : 'free'}</span>}
+                  {o.fulfillment === 'seller' && (
+                    <span className="tag seller" title={`Shipped by the seller (${o.fulfillmentType} / ${o.shippingType}); no TikTok label cost`}>seller-shipped</span>
+                  )}
                 </td>
                 <td className="r">{o.units}</td>
                 <td className="r">{money(o.grossSales)}</td>
                 <td className="r">{o.excluded ? '—' : money(o.payout)}</td>
-                <td className="r">{o.excluded ? '—' : o.cogsComplete ? money(-o.cogs) : <span className="tag bad">no cost</span>}</td>
+                <td className="r" title={o.mcfFee > 0 ? `${money(o.cogs)} product + ${money(o.mcfFee)} MCF` : undefined}>
+                  {o.excluded ? '—' : o.cogsComplete ? money(-(o.cogs + o.mcfFee)) : <span className="tag bad">no cost</span>}
+                  {!o.excluded && o.mcfFeeMissing && <span className="tag bad" title="Seller-shipped, but no MCF fee is set for this SKU">no MCF fee</span>}
+                </td>
                 <td className={`r strong ${tone(o.profit)}`}>{o.excluded ? '—' : money(o.profit)}</td>
               </tr>
             ))}
@@ -501,42 +569,74 @@ function currentCost(history, day) {
   return hit;
 }
 
-function Costs({ summary, costs, onChanged }) {
+// Product cost and MCF fee are both dated per-SKU histories, so they share the form and the history list.
+const KINDS = {
+  costs: {
+    path: 'costs',
+    title: 'Add or change a cost',
+    hint: 'each order is priced at the cost in effect on its order date',
+    label: 'Unit cost (incl. shipping)',
+    button: 'Save cost',
+    historyTitle: 'Cost history',
+    empty: 'No costs entered yet.',
+    removeNoun: 'cost',
+    base: 'Leave the date empty to use this cost for every order that doesn’t have an earlier dated entry (the base cost).',
+  },
+  mcf: {
+    path: 'mcf-fees',
+    title: 'Amazon MCF fee per unit',
+    hint: 'estimate charged on seller-shipped orders; Amazon bills the real fee separately',
+    label: 'MCF fee per unit',
+    button: 'Save MCF fee',
+    historyTitle: 'MCF fee history',
+    empty: 'No MCF fees entered yet. Seller-shipped orders are counted with no fulfillment fee until you add one.',
+    removeNoun: 'MCF fee',
+    base: 'Leave the date empty to use this fee for every seller-shipped order that doesn’t have an earlier dated entry.',
+  },
+};
+
+const BLANK_FORM = { sku: '', cost: '', from: '' };
+
+function Costs({ summary, costs, mcfFees, onChanged }) {
   const unmatched = Object.entries(summary.dataQuality.unmatchedSkus);
   const names = useMemo(() => Object.fromEntries(summary.bySku.map(s => [s.sku, s.productName])), [summary.bySku]);
-  const [form, setForm] = useState({ sku: '', cost: '', from: '' });
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const today = todayKey();
-  const skus = Object.keys(costs);
+  const [forms, setForms] = useState({ costs: BLANK_FORM, mcf: BLANK_FORM });
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(null);
+  const data = { costs, mcf: mcfFees };
+  const knownSkus = [...new Set([...Object.keys(costs), ...Object.keys(mcfFees), ...summary.bySku.map(s => s.sku), ...unmatched.map(([s]) => s)])];
 
-  async function save(e) {
+  const setForm = (kind, patch) => setForms(f => ({ ...f, [kind]: { ...f[kind], ...patch } }));
+  const setError = (kind, message) => setErrors(e => ({ ...e, [kind]: message }));
+
+  async function save(kind, e) {
     e.preventDefault();
-    setError(null);
+    setError(kind, null);
+    const form = forms[kind];
     const cost = Number(form.cost);
-    if (!form.sku.trim() || form.cost === '' || !Number.isFinite(cost) || cost < 0) { setError('Enter a SKU and a cost of $0 or more.'); return; }
-    setBusy(true);
+    if (!form.sku.trim() || form.cost === '' || !Number.isFinite(cost) || cost < 0) { setError(kind, 'Enter a SKU and an amount of $0 or more.'); return; }
+    setBusy(kind);
     try {
-      await readJson(await apiFetch(`/api/profit/costs/${encodeURIComponent(form.sku.trim())}`, {
+      await readJson(await apiFetch(`/api/profit/${KINDS[kind].path}/${encodeURIComponent(form.sku.trim())}`, {
         method: 'PUT',
         body: JSON.stringify({ cost, ...(form.from ? { from: form.from } : {}) }),
       }));
-      setForm({ sku: '', cost: '', from: '' });
+      setForms(f => ({ ...f, [kind]: BLANK_FORM }));
       await onChanged();
     } catch (err) {
-      setError(err.message);
+      setError(kind, err.message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
-  async function remove(sku, from) {
-    if (!window.confirm(`Remove the ${from === '2000-01-01' ? 'base' : from} cost entry for ${sku}?`)) return;
+  async function remove(kind, sku, from) {
+    if (!window.confirm(`Remove the ${from === '2000-01-01' ? 'base' : from} ${KINDS[kind].removeNoun} entry for ${sku}?`)) return;
     try {
-      await readJson(await apiFetch(`/api/profit/costs/${encodeURIComponent(sku)}?from=${from}`, { method: 'DELETE' }));
+      await readJson(await apiFetch(`/api/profit/${KINDS[kind].path}/${encodeURIComponent(sku)}?from=${from}`, { method: 'DELETE' }));
       await onChanged();
     } catch (err) {
-      setError(err.message);
+      setError(kind, err.message);
     }
   }
 
@@ -550,42 +650,58 @@ function Costs({ summary, costs, onChanged }) {
             {unmatched.map(([sku, name]) => (
               <li key={sku}>
                 <div><div className="prod" title={name}>{name}</div><code>{sku}</code></div>
-                <button className="primary small" onClick={() => setForm(f => ({ ...f, sku }))}>Set cost</button>
+                <button className="primary small" onClick={() => setForm('costs', { sku })}>Set cost</button>
               </li>
             ))}
           </ul>
         </section>
       )}
 
+      {Object.keys(KINDS).map(kind => (
+        <CostSection
+          key={kind} kind={kind} spec={KINDS[kind]} entries={data[kind]} names={names} skus={knownSkus}
+          form={forms[kind]} setForm={patch => setForm(kind, patch)} error={errors[kind]}
+          busy={busy === kind} onSave={e => save(kind, e)} onRemove={(sku, from) => remove(kind, sku, from)}
+        />
+      ))}
+    </>
+  );
+}
+
+function CostSection({ kind, spec, entries, names, skus, form, setForm, error, busy, onSave, onRemove }) {
+  const today = todayKey();
+  const history = Object.keys(entries);
+  return (
+    <>
       <section className="card">
-        <h2>Add or change a cost <span className="hint">each order is priced at the cost in effect on its order date</span></h2>
-        <form className="cost-form" onSubmit={save}>
+        <h2>{spec.title} <span className="hint">{spec.hint}</span></h2>
+        <form className="cost-form" onSubmit={onSave}>
           <label>SKU
-            <input list="known-skus" value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. 7LB02052025" />
-            <datalist id="known-skus">{[...new Set([...skus, ...unmatched.map(([s]) => s)])].map(s => <option key={s} value={s} />)}</datalist>
+            <input list={`skus-${kind}`} value={form.sku} onChange={e => setForm({ sku: e.target.value })} placeholder="e.g. 30OZ8262025" />
+            <datalist id={`skus-${kind}`}>{skus.map(s => <option key={s} value={s} />)}</datalist>
           </label>
-          <label>Unit cost (incl. shipping)
-            <input type="number" min="0" step="0.01" value={form.cost} onChange={e => setForm(f => ({ ...f, cost: e.target.value }))} placeholder="0.00" />
+          <label>{spec.label}
+            <input type="number" min="0" step="0.01" value={form.cost} onChange={e => setForm({ cost: e.target.value })} placeholder="0.00" />
           </label>
           <label>Effective from
-            <input type="date" value={form.from} onChange={e => setForm(f => ({ ...f, from: e.target.value }))} />
+            <input type="date" value={form.from} onChange={e => setForm({ from: e.target.value })} />
           </label>
-          <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save cost'}</button>
+          <button className="primary" disabled={busy}>{busy ? 'Saving…' : spec.button}</button>
         </form>
         <p className="muted">
           {form.from
-            ? `Orders from ${form.from} onward use this cost. Earlier orders keep their previous cost.`
-            : 'Leave the date empty to use this cost for every order that doesn’t have an earlier dated entry (the base cost).'}
+            ? `Orders from ${form.from} onward use this ${spec.removeNoun}. Earlier orders keep their previous one.`
+            : spec.base}
         </p>
         {error && <div className="note bad">{error}</div>}
       </section>
 
       <section className="card">
-        <h2>Cost history</h2>
-        {!skus.length && <p className="muted pad">No costs entered yet.</p>}
-        {skus.map(sku => {
-          const history = costs[sku];
-          const now = currentCost(history, today);
+        <h2>{spec.historyTitle}</h2>
+        {!history.length && <p className="muted pad">{spec.empty}</p>}
+        {history.map(sku => {
+          const list = entries[sku];
+          const now = currentCost(list, today);
           return (
             <div key={sku} className="sku-block">
               <div className="sku-head">
@@ -593,12 +709,12 @@ function Costs({ summary, costs, onChanged }) {
                 <div className="sku-now">{now ? money(now.cost) : '—'}<span>now</span></div>
               </div>
               <ul className="history">
-                {history.map(e => (
+                {list.map(e => (
                   <li key={e.from} className={now === e ? 'current' : ''}>
-                    <span>{e.from === '2000-01-01' ? 'Base cost' : `From ${e.from}`}</span>
+                    <span>{e.from === '2000-01-01' ? `Base ${spec.removeNoun}` : `From ${e.from}`}</span>
                     <b>{money(e.cost)}</b>
                     {e.from > today && <span className="tag">scheduled</span>}
-                    <button className="x" title="Remove this entry" onClick={() => remove(sku, e.from)}>×</button>
+                    <button className="x" title="Remove this entry" onClick={() => onRemove(sku, e.from)}>×</button>
                   </li>
                 ))}
               </ul>
