@@ -1,53 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from './auth.js';
+import { todayKey, shiftDay, daysBetween, money, pct, tone, shortDay, timeAgo, readJson } from './profitFormat.js';
+import PriceTest from './PriceTest.jsx';
 import './Profit.css';
 
-const TZ = 'America/Denver';
 const PRESETS = [
   { label: '7D', days: 7 },
   { label: '14D', days: 14 },
   { label: '30D', days: 30 },
   { label: '90D', days: 90 },
 ];
-
-const todayKey = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ });
-
-function shiftDay(ymd, delta) {
-  const d = new Date(`${ymd}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
-
-const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
-
-function money(n, { cents = true } = {}) {
-  if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  const abs = Math.abs(n).toLocaleString('en-US', {
-    minimumFractionDigits: cents ? 2 : 0,
-    maximumFractionDigits: cents ? 2 : 0,
-  });
-  return `${n < 0 ? '-' : ''}$${abs}`;
-}
-
-const pct = n => (n === null || n === undefined ? '—' : `${n.toFixed(1)}%`);
-const tone = n => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
-const shortDay = ymd => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-
-function timeAgo(iso) {
-  if (!iso) return 'never';
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  return `${Math.floor(diff / 86400000)}d ago`;
-}
-
-async function readJson(res) {
-  if (!res) throw new Error('Signed out');
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-  return body;
-}
 
 export default function ProfitDashboard() {
   const [tab, setTab] = useState('overview');
@@ -136,7 +98,7 @@ export default function ProfitDashboard() {
       {error && <div className="note bad">{error}</div>}
 
       <nav className="tabs">
-        {[['overview', 'Overview'], ['orders', 'Orders'], ['costs', 'Costs']].map(([id, label]) => (
+        {[['overview', 'Overview'], ['orders', 'Orders'], ['pricing', 'Pricing'], ['costs', 'Costs']].map(([id, label]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             {label}
             {id === 'costs' && summary && (summary.dataQuality.ordersWithMissingCost > 0 || summary.dataQuality.sellerShippedMissingMcfFee > 0) && <span className="dot" title="Some SKUs have no cost or MCF fee" />}
@@ -154,6 +116,7 @@ export default function ProfitDashboard() {
         />
       )}
       {summary && tab === 'orders' && <Orders range={range} filter={orderFilter} setFilter={setOrderFilter} />}
+      {summary && tab === 'pricing' && <PriceTest range={range} summary={summary} />}
       {summary && tab === 'costs' && <Costs summary={summary} costs={costs} mcfFees={mcfFees} onChanged={load} />}
     </div>
   );

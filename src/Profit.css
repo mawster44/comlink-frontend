@@ -163,3 +163,9 @@ h2 > .tag { margin-left: 0; }
 .history li.current { background: var(--surface2); color: var(--text); }
 .history .x { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 4px; }
 .history .x:hover { color: var(--accent); }
+
+.cost-form label select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font: inherit; padding: 7px 10px; text-transform: none; letter-spacing: 0; font-weight: 400; min-width: 220px; }
+.verdict { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; }
+.verdict p { margin: 4px 0; font-size: 13px; }
+.verdict p.pos { color: var(--good); }
+.verdict p.neg { color: var(--accent); }
