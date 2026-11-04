@@ -205,3 +205,15 @@ h2 > .tag { margin-left: 0; }
 .snap-notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--warn); }
 .snap-more { border: none; border-top: 1px solid var(--border); background: none; color: var(--accent); font-weight: 600; font-size: 13px; padding: 9px; cursor: pointer; }
 .snap-more:hover { background: var(--surface2); }
+
+/* Business profit: one combined number per period, with each channel's part under it. */
+.biz-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.biz-card { gap: 6px; }
+.biz-big { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.biz-channels { list-style: none; margin: 4px 0 0; padding: 8px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.biz-channels li { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+.biz-channels li > span:first-child { color: var(--muted); }
+.biz-flag { color: var(--warn); font-size: 11px; font-weight: 600; }
+.biz-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.biz-form .dash { color: var(--muted); }
+.profit select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; padding: 6px 10px; }
