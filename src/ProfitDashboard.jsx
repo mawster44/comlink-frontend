@@ -168,6 +168,8 @@ function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
         <DailyChart daily={daily} />
       </section>
 
+      <TakeBreakdown daily={daily} />
+
       <section className="card">
         <h2>Daily P&amp;L <span className="hint">click an ad spend amount to edit it</span></h2>
         <DailyTable daily={daily} onChanged={onChanged} />
@@ -363,14 +365,54 @@ function niceStep(range, target) {
   return (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
 }
 
+const sumOf = (daily, key) => daily.reduce((n, d) => n + (d[key] || 0), 0);
+
+// Sale price → payout. TikTok has already taken these out of the payout, so they explain it rather than reduce profit again.
+function TakeBreakdown({ daily }) {
+  const sales = sumOf(daily, 'breakdownSales');
+  const fees = sumOf(daily, 'platformFees');
+  const commission = sumOf(daily, 'creatorCommission');
+  const label = sumOf(daily, 'labelShipping');
+  const other = sumOf(daily, 'otherAdjustments');
+  const payout = sumOf(daily, 'breakdownPayout');
+  if (!sales && !payout) return null;
+  const share = (n) => (sales > 0 ? ` · ${((n / sales) * 100).toFixed(1)}%` : '');
+  return (
+    <section className="card">
+      <h2>Where the sale price went <span className="hint">settled orders · already taken out of the payout, not subtracted again</span></h2>
+      <div className="free-grid six">
+        <div><span className="kpi-label">Sales</span><span className="kpi-value">{money(sales)}</span></div>
+        <div><span className="kpi-label">TikTok fees{share(fees)}</span><span className="kpi-value">{money(-fees)}</span></div>
+        <div><span className="kpi-label">Creator commission{share(commission)}</span><span className="kpi-value">{money(-commission)}</span></div>
+        <div><span className="kpi-label">Shipping labels{share(label)}</span><span className="kpi-value">{money(-label)}</span></div>
+        <div><span className="kpi-label">Refunds &amp; other</span><span className={`kpi-value ${tone(other)}`}>{money(other)}</span></div>
+        <div><span className="kpi-label">Paid out</span><span className="kpi-value">{money(payout)}</span></div>
+      </div>
+    </section>
+  );
+}
+
 function DailyTable({ daily, onChanged }) {
   const rows = [...daily].reverse();
+  const [showTake, setShowTake] = useState(true);
+  const takeTitle = 'Settled orders only. Already taken out of the payout.';
   return (
     <div className="table-wrap">
+      <label className="muted take-toggle">
+        <input type="checkbox" checked={showTake} onChange={e => setShowTake(e.target.checked)} /> Show what TikTok took (fees, commission, labels)
+      </label>
       <table>
         <thead>
           <tr>
-            <th>Date</th><th className="r">Orders</th><th className="r">Units</th><th className="r">Payout</th>
+            <th>Date</th><th className="r">Orders</th><th className="r">Units</th>
+            {showTake && (
+              <>
+                <th className="r" title={takeTitle}>Sales</th><th className="r" title={takeTitle}>TikTok fees</th>
+                <th className="r" title={takeTitle}>Creator comm.</th><th className="r" title={takeTitle}>Labels</th>
+                <th className="r" title="Refunds, shipping subsidies and other adjustments that move the payout">Other</th>
+              </>
+            )}
+            <th className="r">Payout</th>
             <th className="r">Cost</th><th className="r">Before ads</th><th className="r">Ad spend</th>
             <th className="r">Net profit</th><th className="r">Margin</th>
           </tr>
@@ -381,6 +423,15 @@ function DailyTable({ daily, onChanged }) {
               <td>{shortDay(d.date)}{d.pendingOrders > 0 && <span className="tag warn" title={`${d.pendingOrders} orders awaiting payout`}>{d.pendingOrders} pending</span>}</td>
               <td className="r">{d.orders}</td>
               <td className="r">{d.units}</td>
+              {showTake && (
+                <>
+                  <td className="r">{money(d.breakdownSales)}</td>
+                  <td className="r">{money(-d.platformFees)}</td>
+                  <td className="r">{money(-d.creatorCommission)}</td>
+                  <td className="r">{money(-d.labelShipping)}</td>
+                  <td className={`r ${tone(d.otherAdjustments)}`}>{money(d.otherAdjustments)}</td>
+                </>
+              )}
               <td className="r">{money(d.payout)}</td>
               <td className="r" title={d.mcfFees > 0 ? `${money(d.cogs)} product + ${money(d.mcfFees)} MCF` : undefined}>{money(-(d.cogs + d.mcfFees))}</td>
               <td className={`r ${tone(d.profitBeforeAds)}`}>{money(d.profitBeforeAds)}</td>

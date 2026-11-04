@@ -8,6 +8,7 @@ const label = (type) => type.replace(/_/g, ' ').toLowerCase();
 export default function Reconcile({ range }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
 
   useEffect(() => {
     setData(null);
@@ -105,19 +106,33 @@ export default function Reconcile({ range }) {
             </section>
           )}
 
+          <EmptyStatements e={data.emptyStatements} />
+
           <section className="card">
-            <h2>Statements</h2>
+            <h2>Statements <span className="hint">revenue, fees, shipping and adjustments are TikTok’s own split of each statement</span></h2>
+            <label className="muted take-toggle">
+              <input type="checkbox" checked={onlyEmpty} onChange={e => setOnlyEmpty(e.target.checked)} /> Only statements with no transaction rows
+            </label>
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Paid</th><th>Status</th><th className="r">Statement total</th><th className="r">Rows received</th><th className="r">Account-level</th><th className="r">Gap</th></tr>
+                  <tr>
+                    <th>Paid</th><th>Status</th><th className="r">Statement total</th>
+                    <th className="r">Revenue</th><th className="r">Fees</th><th className="r">Shipping</th><th className="r">Adjustments</th>
+                    <th className="r">Rows</th><th className="r">Rows total</th><th className="r">Account-level</th><th className="r">Gap</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {data.statements.map(s => (
+                  {data.statements.filter(s => !onlyEmpty || s.rowCount === 0).map(s => (
                     <tr key={s.id}>
                       <td>{shortDay(s.date)}</td>
                       <td><span className="tag">{(s.paymentStatus || 'unknown').toLowerCase()}</span></td>
-                      <td className="r">{money(s.settlement)}</td>
+                      <td className={`r ${tone(s.settlement)}`}>{money(s.settlement)}</td>
+                      <td className="r">{money(s.revenue)}</td>
+                      <td className="r">{money(s.fee)}</td>
+                      <td className="r">{money(s.shipping)}</td>
+                      <td className="r">{money(s.adjustment)}</td>
+                      <td className="r">{s.rowCount}</td>
                       <td className="r">{money(s.rows)}</td>
                       <td className={`r ${tone(s.accountLevel)}`}>{money(s.accountLevel)}</td>
                       <td className="r">{Math.abs(s.gap) < 0.005 ? '—' : <span className="tag bad">{money(s.gap)}</span>}</td>
@@ -130,6 +145,29 @@ export default function Reconcile({ range }) {
         </>
       )}
     </>
+  );
+}
+
+// Statements TikTok returned no transaction rows for. Their total is all we have, so show how TikTok itself splits it.
+function EmptyStatements({ e }) {
+  if (!e || e.count === 0) return null;
+  const parts = [['Revenue', e.revenue], ['Fees', e.fee], ['Shipping', e.shipping], ['Adjustments', e.adjustment]];
+  const biggest = parts.reduce((a, b) => (Math.abs(b[1]) > Math.abs(a[1]) ? b : a));
+  return (
+    <section className="card">
+      <h2>Statements with no transaction rows <span className="hint">{e.count} statements · {e.paid} paid</span></h2>
+      <div className="free-grid">
+        <div><span className="kpi-label">Total</span><span className={`kpi-value ${tone(e.settlement)}`}>{money(e.settlement)}</span></div>
+        {parts.map(([name, value]) => (
+          <div key={name}><span className="kpi-label">{name}</span><span className={`kpi-value ${tone(value)}`}>{money(value)}</span></div>
+        ))}
+      </div>
+      <p className="muted">
+        {Math.abs(biggest[1]) < 0.005
+          ? 'TikTok’s own split for these statements shows nothing under revenue, fees, shipping or adjustments, so it doesn’t say what they are.'
+          : `Most of it sits under ${biggest[0].toLowerCase()}. These aren’t tied to any order, so profit doesn’t include them.`}
+      </p>
+    </section>
   );
 }
 

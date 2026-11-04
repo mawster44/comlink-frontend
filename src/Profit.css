@@ -136,6 +136,10 @@ h2 > .tag { margin-left: 0; }
 .free-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 10px; }
 @media (max-width: 1100px) { .free-grid { grid-template-columns: repeat(2, 1fr); } }
 .free-grid > div { display: flex; flex-direction: column; gap: 4px; }
+.free-grid.six { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 1100px) { .free-grid.six { grid-template-columns: repeat(3, 1fr); } }
+.take-toggle { display: block; font-size: 12px; margin-bottom: 8px; cursor: pointer; }
+.take-toggle input { margin-right: 6px; }
 .profit button.link { background: none; border: none; color: var(--accent2); font-size: 12px; font-weight: 600; padding: 0; margin-left: auto; }
 .profit button.link:hover { text-decoration: underline; }
 
