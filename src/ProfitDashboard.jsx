@@ -3,6 +3,7 @@ import { apiFetch } from './auth.js';
 import { todayKey, shiftDay, daysBetween, money, pct, tone, shortDay, timeAgo, readJson } from './profitFormat.js';
 import PriceTest from './PriceTest.jsx';
 import McfActuals from './McfActuals.jsx';
+import Reconcile from './Reconcile.jsx';
 import './Profit.css';
 
 const PRESETS = [
@@ -102,7 +103,7 @@ export default function ProfitDashboard() {
       {error && <div className="note bad">{error}</div>}
 
       <nav className="tabs">
-        {[['overview', 'Overview'], ['orders', 'Orders'], ['pricing', 'Pricing'], ['costs', 'Costs']].map(([id, label]) => (
+        {[['overview', 'Overview'], ['orders', 'Orders'], ['pricing', 'Pricing'], ['reconcile', 'Reconcile'], ['costs', 'Costs']].map(([id, label]) => (
           <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
             {label}
             {id === 'costs' && summary && (summary.dataQuality.ordersWithMissingCost > 0 || summary.dataQuality.sellerShippedMissingMcfFee > 0) && <span className="dot" title="Some SKUs have no cost or MCF fee" />}
@@ -121,6 +122,7 @@ export default function ProfitDashboard() {
       )}
       {summary && tab === 'orders' && <Orders range={range} filter={orderFilter} setFilter={setOrderFilter} />}
       {summary && tab === 'pricing' && <PriceTest range={range} summary={summary} />}
+      {summary && tab === 'reconcile' && <Reconcile range={range} />}
       {summary && tab === 'costs' && <Costs summary={summary} costs={costs} mcfFees={mcfFees} mcfActuals={mcfActuals} onChanged={load} />}
     </div>
   );
