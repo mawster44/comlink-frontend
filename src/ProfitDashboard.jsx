@@ -4,6 +4,7 @@ import { todayKey, shiftDay, daysBetween, money, pct, tone, shortDay, timeAgo, r
 import PriceTest from './PriceTest.jsx';
 import McfActuals from './McfActuals.jsx';
 import Reconcile from './Reconcile.jsx';
+import Snapshot from './Snapshot.jsx';
 import './Profit.css';
 
 const PRESETS = [
@@ -116,6 +117,7 @@ export default function ProfitDashboard() {
       {summary && tab === 'overview' && (
         <Overview
           summary={summary} onChanged={load} goCosts={() => setTab('costs')}
+          onPickRange={(from, to) => { setRange({ from, to }); window.scrollTo?.({ top: 0, behavior: 'smooth' }); }}
           goFree={() => { setOrderFilter('free'); setTab('orders'); }}
           goSeller={() => { setOrderFilter('seller'); setTab('orders'); }}
         />
@@ -138,12 +140,14 @@ function AdsStatus({ ads }) {
 
 /* ---------- Overview ---------- */
 
-function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
+function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }) {
   const { totals, daily, bySku, dataQuality: q, free, fulfillment, accountCharges, range } = summary;
   const adShare = totals.profitBeforeAds > 0 ? (totals.adSpend / totals.profitBeforeAds) * 100 : null;
 
   return (
     <>
+      <Snapshot refresh={summary} onPick={onPickRange} />
+
       <section className="kpis">
         <Kpi label="Net profit" value={money(totals.netProfit)} cls={tone(totals.netProfit)} big
           sub={`${pct(totals.marginPct)} of payout`} />

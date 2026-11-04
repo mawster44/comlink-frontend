@@ -179,3 +179,29 @@ h2 > .tag { margin-left: 0; }
 .sku-block > .muted { margin-top: 6px; }
 .actual-side .x { background: none; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 4px; }
 .actual-side .x:hover { color: var(--accent); }
+
+/* Snapshot cards */
+.snapshot { display: flex; flex-direction: column; gap: 8px; }
+.snap-head { display: flex; justify-content: space-between; align-items: center; }
+.link-btn { background: none; border: none; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+.link-btn:hover { color: var(--text); }
+.snap-edit { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.snap-edit label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.snap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.snap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.snap-title { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; background: rgba(91, 141, 224, 0.28); }
+.snap-title span { font-size: 12px; color: var(--muted); }
+.snap-yesterday .snap-title { background: rgba(104, 169, 200, 0.26); }
+.snap-last7 .snap-title { background: rgba(94, 178, 168, 0.26); }
+.snap-last30 .snap-title { background: rgba(94, 178, 140, 0.26); }
+.snap-mtd .snap-title { background: rgba(84, 170, 120, 0.26); }
+.snap-lastMonth .snap-title { background: rgba(110, 175, 90, 0.26); }
+.snap-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.snap-body > div, .snap-row > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.snap-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.snap-big { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.snap-net { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.snap em { font-style: normal; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+.snap-notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--warn); }
+.snap-more { border: none; border-top: 1px solid var(--border); background: none; color: var(--accent); font-weight: 600; font-size: 13px; padding: 9px; cursor: pointer; }
+.snap-more:hover { background: var(--surface2); }
