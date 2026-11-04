@@ -434,6 +434,10 @@ function TakeBreakdown({ daily }) {
   const payout = sumOf(daily, 'breakdownPayout');
   if (!sales && !payout) return null;
   const share = (n) => (sales > 0 ? ` · ${((n / sales) * 100).toFixed(1)}%` : '');
+  const organic = sumOf(daily, 'creatorOrganic');
+  const adsDriven = sumOf(daily, 'creatorAds');
+  const partner = sumOf(daily, 'creatorPartner');
+  const unsplit = sumOf(daily, 'creatorUnsplit');
   return (
     <section className="card">
       <h2>Where the sale price went <span className="hint">settled orders · already taken out of the payout, not subtracted again</span></h2>
@@ -445,6 +449,14 @@ function TakeBreakdown({ daily }) {
         <div><span className="kpi-label">Refunds &amp; other</span><span className={`kpi-value ${tone(other)}`}>{money(other)}</span></div>
         <div><span className="kpi-label">Paid out</span><span className="kpi-value">{money(payout)}</span></div>
       </div>
+      {commission > 0 && (
+        <p className="muted">
+          Creator commission: <b>{money(organic)}</b> organic (20% rate)
+          {' · '}<b>{money(adsDriven)}</b> ads-driven (10% rate, on top of the ad spend)
+          {partner > 0 && <> · <b>{money(partner)}</b> partner</>}
+          {unsplit > 0 && <> · <b>{money(unsplit)}</b> not split yet. Press Sync now to fill it in</>}
+        </p>
+      )}
     </section>
   );
 }
@@ -453,6 +465,8 @@ function DailyTable({ daily, onChanged }) {
   const rows = [...daily].reverse();
   const [showTake, setShowTake] = useState(true);
   const takeTitle = 'Settled orders only. Already taken out of the payout.';
+  // Partner commission and rows from before the kinds were stored get their own column, only when there are any.
+  const showOtherComm = daily.some(d => (d.creatorPartner || 0) + (d.creatorUnsplit || 0) > 0);
   return (
     <div className="table-wrap">
       <label className="muted take-toggle">
@@ -465,7 +479,10 @@ function DailyTable({ daily, onChanged }) {
             {showTake && (
               <>
                 <th className="r" title={takeTitle}>Sales</th><th className="r" title={takeTitle}>TikTok fees</th>
-                <th className="r" title={takeTitle}>Creator comm.</th><th className="r" title={takeTitle}>Labels</th>
+                <th className="r" title={`${takeTitle} Standard creator commission, 20% for this shop.`}>Organic comm.</th>
+                <th className="r" title={`${takeTitle} Creator commission when ads drove the sale, 10% for this shop, on top of the ad spend.`}>Ads comm.</th>
+                {showOtherComm && <th className="r" title={`${takeTitle} Partner commission, plus commission not split by kind yet (Sync now fills it in).`}>Other comm.</th>}
+                <th className="r" title={takeTitle}>Labels</th>
                 <th className="r" title="Refunds, shipping subsidies and other adjustments that move the payout">Other</th>
               </>
             )}
@@ -485,7 +502,9 @@ function DailyTable({ daily, onChanged }) {
                 <>
                   <td className="r">{money(d.breakdownSales)}</td>
                   <td className="r">{money(-d.platformFees)}</td>
-                  <td className="r">{money(-d.creatorCommission)}</td>
+                  <td className="r">{money(-d.creatorOrganic)}</td>
+                  <td className="r">{money(-d.creatorAds)}</td>
+                  {showOtherComm && <td className="r">{money(-(d.creatorPartner + d.creatorUnsplit))}</td>}
                   <td className="r">{money(-d.labelShipping)}</td>
                   <td className={`r ${tone(d.otherAdjustments)}`}>{money(d.otherAdjustments)}</td>
                 </>
