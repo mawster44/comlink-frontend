@@ -297,12 +297,13 @@
 /* View toggle (Customer Support / Affiliates) */
 .view-toggle {
   display: flex;
+  flex-wrap: wrap; /* four views no longer fit on one row */
   gap: 4px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
 .toggle-btn {
-  flex: 1;
+  flex: 1 1 auto;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;

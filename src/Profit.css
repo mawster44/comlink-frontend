@@ -207,7 +207,7 @@ h2 > .tag { margin-left: 0; }
 .snap-more:hover { background: var(--surface2); }
 
 /* Business profit: one combined number per period, with each channel's part under it. */
-.biz-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.biz-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
 .biz-card { gap: 6px; }
 .biz-big { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .biz-channels { list-style: none; margin: 4px 0 0; padding: 8px 0 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
