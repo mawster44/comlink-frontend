@@ -451,8 +451,8 @@ function TakeBreakdown({ daily }) {
       </div>
       {commission > 0 && (
         <p className="muted">
-          Creator commission: <b>{money(organic)}</b> organic (20% rate)
-          {' · '}<b>{money(adsDriven)}</b> ads-driven (10% rate, on top of the ad spend)
+          Creator commission: <b>{money(organic)}</b> standard rate
+          {' · '}<b>{money(adsDriven)}</b> Shop Ads rate (ads-driven sales, on top of the ad spend)
           {partner > 0 && <> · <b>{money(partner)}</b> partner</>}
           {unsplit > 0 && <> · <b>{money(unsplit)}</b> not split yet. Press Sync now to fill it in</>}
         </p>
@@ -479,8 +479,8 @@ function DailyTable({ daily, onChanged }) {
             {showTake && (
               <>
                 <th className="r" title={takeTitle}>Sales</th><th className="r" title={takeTitle}>TikTok fees</th>
-                <th className="r" title={`${takeTitle} Standard creator commission, 20% for this shop.`}>Organic comm.</th>
-                <th className="r" title={`${takeTitle} Creator commission when ads drove the sale, 10% for this shop, on top of the ad spend.`}>Ads comm.</th>
+                <th className="r" title={`${takeTitle} Standard creator commission. Rates are set per creator (mostly 20%).`}>Standard comm.</th>
+                <th className="r" title={`${takeTitle} Creator commission when ads drove the sale. Each creator has their own Shop Ads rate (10%, 15% or 20%), on top of the ad spend.`}>Shop Ads comm.</th>
                 {showOtherComm && <th className="r" title={`${takeTitle} Partner commission, plus commission not split by kind yet (Sync now fills it in).`}>Other comm.</th>}
                 <th className="r" title={takeTitle}>Labels</th>
                 <th className="r" title="Refunds, shipping subsidies and other adjustments that move the payout">Other</th>
