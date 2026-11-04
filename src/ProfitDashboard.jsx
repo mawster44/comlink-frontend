@@ -163,7 +163,7 @@ function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
 
-      <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} campaigns={summary.adsCampaigns} grossSales={totals.grossSales} adsSync={summary.adsSync} />
+      <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} campaigns={summary.adsCampaigns} dates={daily.map(d => d.date)} grossSales={totals.grossSales} adsSync={summary.adsSync} />
 
       <Quality q={q} goCosts={goCosts} />
 
@@ -231,11 +231,132 @@ function Campaigns({ campaigns }) {
   );
 }
 
-function AdsRoas({ roas, breakEven, campaigns = [], grossSales, adsSync }) {
+// Splits a series into runs, so a day with no ads leaves a gap in the line instead of a dive to zero.
+function pathOf(points) {
+  let d = '';
+  let open = false;
+  for (const p of points) {
+    if (p === null) { open = false; continue; }
+    d += `${open ? 'L' : 'M'}${p[0]},${p[1]} `;
+    open = true;
+  }
+  return d.trim();
+}
+
+// ROAS per day (dots) and over the trailing 7 days (line), against the ROAS needed to break even. Where the dots sit
+// below a dashed line, the ads were losing money on that kind of sale.
+function AdsRoasChart({ dates, days, breakEven }) {
+  const [hover, setHover] = useState(null);
+  const W = 900, H = 240, padL = 40, padR = 12, padT = 12, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+
+  const series = useMemo(() => dates.map((date, i) => {
+    let revenue = 0, cost = 0;
+    for (let k = Math.max(0, i - 6); k <= i; k += 1) {
+      const b = days[dates[k]];
+      if (b) { revenue += b.revenue; cost += b.cost; }
+    }
+    const a = days[date];
+    return { date, a, roas: a && a.cost > 0 ? a.revenue / a.cost : null, rolling: cost > 0 ? revenue / cost : null };
+  }), [dates, days]);
+
+  const be = useMemo(() => {
+    const seven = breakEven.groups.filter(g => g.size === '7 lb');
+    const sales = seven.reduce((n, g) => n + g.avgPrice * g.units, 0);
+    const profit = seven.reduce((n, g) => n + g.profitPerUnit * g.units, 0);
+    return { shop: breakEven.blended.roas, sevenLb: profit > 0 ? sales / profit : null, allIn: breakEven.allIn?.roas ?? null };
+  }, [breakEven]);
+
+  const { yMax, ticks } = useMemo(() => {
+    const vals = [...series.map(s => s.roas), ...series.map(s => s.rolling), be.shop, be.sevenLb, be.allIn].filter(Number.isFinite);
+    const hi = Math.max(1, ...vals);
+    const step = niceStep(hi, 4);
+    const top = Math.ceil(hi / step) * step;
+    const t = [];
+    for (let v = 0; v <= top + step / 2; v += step) t.push(v);
+    return { yMax: top, ticks: t };
+  }, [series, be]);
+
+  if (!dates.length) return null;
+
+  const y = v => padT + ih - (v / (yMax || 1)) * ih;
+  const slot = iw / dates.length;
+  const cx = i => padL + slot * i + slot / 2;
+  const labelEvery = Math.ceil(dates.length / 10);
+  const h = hover !== null ? series[hover] : null;
+  const fmt = v => (v === null || v === undefined ? '—' : `${v.toFixed(2)}×`);
+
+  return (
+    <div>
+      <h3 className="sub-h">
+        ROAS by day
+        <span className="legend">
+          <i className="lg-dot" /> daily <i className="lg-roll" /> 7-day <i className="lg-be" /> break-even
+        </span>
+      </h3>
+      <div className="chart" onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Ads ROAS by day against break-even">
+          {ticks.map(t => (
+            <g key={t}>
+              <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className={t === 0 ? 'zero' : 'grid'} />
+              <text x={padL - 8} y={y(t) + 4} className="axis" textAnchor="end">{t}×</text>
+            </g>
+          ))}
+          {be.allIn !== null && (
+            <g>
+              <line x1={padL} x2={W - padR} y1={y(be.allIn)} y2={y(be.allIn)} className="be-allin" />
+              <text x={W - padR - 4} y={y(be.allIn) - 4} className="axis be-label" textAnchor="end">to make money overall {be.allIn.toFixed(1)}×</text>
+            </g>
+          )}
+          {be.shop !== null && (
+            <g>
+              <line x1={padL} x2={W - padR} y1={y(be.shop)} y2={y(be.shop)} className="be-shop" />
+              <text x={W - padR - 4} y={y(be.shop) - 4} className="axis be-label" textAnchor="end">shop-wide, paid orders {be.shop.toFixed(1)}×</text>
+            </g>
+          )}
+          {be.sevenLb !== null && (
+            <g>
+              <line x1={padL} x2={W - padR} y1={y(be.sevenLb)} y2={y(be.sevenLb)} className="be-seven" />
+              <text x={W - padR - 4} y={y(be.sevenLb) - 4} className="axis be-label" textAnchor="end">7 lb {be.sevenLb.toFixed(1)}×</text>
+            </g>
+          )}
+          <path d={pathOf(series.map((s, i) => (s.rolling === null ? null : [cx(i), y(s.rolling)])))} className="roas-roll" fill="none" />
+          {series.map((s, i) => s.roas !== null && (
+            <circle key={s.date} cx={cx(i)} cy={y(s.roas)} r={hover === i ? 4.5 : 2.8} className="roas-dot" />
+          ))}
+          {series.map((s, i) => i % labelEvery === 0 && (
+            <text key={s.date} x={cx(i)} y={H - 8} className="axis" textAnchor="middle">{shortDay(s.date)}</text>
+          ))}
+          {series.map((s, i) => (
+            <rect key={s.date} x={padL + slot * i} y={padT} width={slot} height={ih} fill="transparent"
+              onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} />
+          ))}
+        </svg>
+        {h && (
+          <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+            <strong>{shortDay(h.date)}</strong>
+            <span>ROAS <b>{fmt(h.roas)}</b></span>
+            <span>7-day <b>{fmt(h.rolling)}</b></span>
+            {h.a ? (
+              <>
+                <span>Ad cost <b>{money(h.a.cost)}</b></span>
+                <span>Ad-credited sales <b>{money(h.a.revenue)}</b></span>
+                <span className="muted">{h.a.orders} ad orders</span>
+              </>
+            ) : <span className="muted">no ads that day</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdsRoas({ roas, breakEven, campaigns = [], dates = [], grossSales, adsSync }) {
   if (!roas || !breakEven) return null;
   const pullError = adsSync?.attribution?.error;
   const campaignError = adsSync?.campaigns?.error;
   const shopWide = breakEven.blended.roas;
+  const allIn = breakEven.allIn;
   const groups = breakEven.groups.filter(g => g.orders >= 5);
   const verdict = (be) => (be === null ? null : roas.roas >= be ? 'pos' : 'neg');
 
@@ -249,14 +370,16 @@ function AdsRoas({ roas, breakEven, campaigns = [], grossSales, adsSync }) {
         <>
           <div className="roas-kpis">
             <Kpi label="Ads ROAS" value={roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`} big
-              cls={shopWide === null ? '' : roas.roas >= shopWide ? 'pos' : 'neg'}
-              sub={shopWide === null ? null : `${shopWide.toFixed(2)}× needed shop-wide`} />
+              cls={allIn?.roas == null ? '' : roas.roas >= allIn.roas ? 'pos' : 'neg'}
+              sub={allIn?.roas == null ? (shopWide === null ? null : `${shopWide.toFixed(2)}× to cover product and fees`) : `${allIn.roas.toFixed(2)}× needed to make money overall`} />
             <Kpi label="Ad-credited sales" value={money(roas.revenue, { cents: false })}
               sub={grossSales > 0 ? `${((roas.revenue / grossSales) * 100).toFixed(0)}% of all sales` : null} />
             <Kpi label="Ad cost" value={money(roas.cost, { cents: false })} sub={`${roas.daysWithAds} days with ads`} />
             <Kpi label="Orders from ads" value={roas.orders.toLocaleString()} />
             <Kpi label="Cost per ad order" value={roas.costPerOrder === null ? '—' : money(roas.costPerOrder)} />
           </div>
+
+          <AdsRoasChart dates={dates} days={roas.days} breakEven={breakEven} />
 
           {campaignError && <div className="note bad">Campaign breakdown pull failed: {campaignError}</div>}
           {campaigns.length > 0 && (
@@ -286,6 +409,14 @@ function AdsRoas({ roas, breakEven, campaigns = [], grossSales, adsSync }) {
                   <td className="r strong">{shopWide === null ? 'none' : `${shopWide.toFixed(2)}×`}</td>
                   <td className={`r ${verdict(shopWide) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
                 </tr>
+                {allIn && (
+                  <tr>
+                    <td className="strong">Whole shop, all-in</td><td className="muted">all costs</td><td className="r muted">—</td>
+                    <td className={`r ${tone(allIn.affordableSpend)}`}>{money(allIn.affordableSpend, { cents: false })} <span className="muted">to spend on ads</span></td>
+                    <td className="r strong">{allIn.roas === null ? 'none' : `${allIn.roas.toFixed(2)}×`}</td>
+                    <td className={`r ${verdict(allIn.roas) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                  </tr>
+                )}
                 {groups.map(g => (
                   <tr key={`${g.sku}|${g.fulfillment}`}>
                     <td>{g.size} <span className="muted">· {g.orders} orders</span></td>
@@ -300,9 +431,10 @@ function AdsRoas({ roas, breakEven, campaigns = [], grossSales, adsSync }) {
             </table>
           </div>
           <p className="muted pad">
-            Break-even is the sale price divided by what the sale earns before ad spend (product cost, MCF and TikTok fees already out), so a product
-            that loses money before ads can’t be fixed by any ROAS. TikTok doesn’t split ad results by product here, so compare your ROAS with the row for
-            what you mostly advertise. Free sample orders and TikTok account charges are left out; counting the cost of free orders raises the shop-wide figure.
+            Break-even is the sale price divided by what the sale earns before ad spend. That earning is after product cost, MCF, TikTok fees and creator
+            commission (standard and Shop Ads), because the payout already has the commission taken out. A product that loses money before ads can’t be fixed
+            by any ROAS. <strong>All-in</strong> also takes off free sample orders and TikTok account charges, so it is the ROAS at which the whole business nets zero
+            at the current product mix. TikTok doesn’t split ad results by product, so compare your ROAS with the row for what you mostly advertise.
           </p>
         </>
       )}
