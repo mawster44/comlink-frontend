@@ -163,6 +163,8 @@ function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
 
+      <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} grossSales={totals.grossSales} adsSync={summary.adsSync} />
+
       <Quality q={q} goCosts={goCosts} />
 
       <FreeOrders free={free} totals={totals} goFree={goFree} />
@@ -188,6 +190,75 @@ function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }
         <ProductTable rows={bySku} />
       </section>
     </>
+  );
+}
+
+const SHIPS = { tiktok: 'TikTok ships', seller: 'We ship (MCF)', unknown: 'Unknown' };
+
+// What TikTok credits to the ads, against the return an ad needs to pay for itself. An ad can only spend what a sale
+// earns before ads, so break-even ROAS is the sale price over that earning.
+function AdsRoas({ roas, breakEven, grossSales, adsSync }) {
+  if (!roas || !breakEven) return null;
+  const pullError = adsSync?.attribution?.error;
+  const shopWide = breakEven.blended.roas;
+  const groups = breakEven.groups.filter(g => g.orders >= 5);
+  const verdict = (be) => (be === null ? null : roas.roas >= be ? 'pos' : 'neg');
+
+  return (
+    <section className="card">
+      <h2>Ads return <span className="hint">sales TikTok credits to your ads ÷ ad cost</span></h2>
+      {pullError && <div className="note bad">Ad attribution pull failed: {pullError}</div>}
+      {roas.daysWithAds === 0 ? (
+        <p className="muted">No ad attribution for this range yet. Run Sync now to pull it from TikTok.</p>
+      ) : (
+        <>
+          <div className="roas-kpis">
+            <Kpi label="Ads ROAS" value={roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`} big
+              cls={shopWide === null ? '' : roas.roas >= shopWide ? 'pos' : 'neg'}
+              sub={shopWide === null ? null : `${shopWide.toFixed(2)}× needed shop-wide`} />
+            <Kpi label="Ad-credited sales" value={money(roas.revenue, { cents: false })}
+              sub={grossSales > 0 ? `${((roas.revenue / grossSales) * 100).toFixed(0)}% of all sales` : null} />
+            <Kpi label="Ad cost" value={money(roas.cost, { cents: false })} sub={`${roas.daysWithAds} days with ads`} />
+            <Kpi label="Orders from ads" value={roas.orders.toLocaleString()} />
+            <Kpi label="Cost per ad order" value={roas.costPerOrder === null ? '—' : money(roas.costPerOrder)} />
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Break-even by product</th><th>Shipped</th><th className="r">Avg price</th>
+                  <th className="r">Earns before ads</th><th className="r">Break-even ROAS</th><th className="r">Your ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="strong">Whole shop, every order</td><td className="muted">all</td><td className="r muted">—</td>
+                  <td className="r">{breakEven.blended.marginPct === null ? '—' : `${breakEven.blended.marginPct.toFixed(1)}% of sales`}</td>
+                  <td className="r strong">{shopWide === null ? 'none' : `${shopWide.toFixed(2)}×`}</td>
+                  <td className={`r ${verdict(shopWide) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                </tr>
+                {groups.map(g => (
+                  <tr key={`${g.sku}|${g.fulfillment}`}>
+                    <td>{g.size} <span className="muted">· {g.orders} orders</span></td>
+                    <td className="muted">{SHIPS[g.fulfillment] || g.fulfillment}</td>
+                    <td className="r">{money(g.avgPrice)}</td>
+                    <td className={`r ${tone(g.profitPerUnit)}`}>{money(g.profitPerUnit)} <span className="muted">({pct(g.marginPct)})</span></td>
+                    <td className="r strong">{g.roas === null ? <span className="neg" title="Loses money before any ad spend">never</span> : `${g.roas.toFixed(2)}×`}</td>
+                    <td className={`r ${verdict(g.roas) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="muted pad">
+            Break-even is the sale price divided by what the sale earns before ad spend (product cost, MCF and TikTok fees already out), so a product
+            that loses money before ads can’t be fixed by any ROAS. TikTok doesn’t split ad results by product here, so compare your ROAS with the row for
+            what you mostly advertise. TikTok account charges are left out.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
