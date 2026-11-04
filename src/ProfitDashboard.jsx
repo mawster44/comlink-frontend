@@ -200,14 +200,29 @@ const SHIPS = { tiktok: 'TikTok ships', seller: 'We ship (MCF)', unknown: 'Unkno
 // "[Auto-created] US Weekly Platform Promotion_20261020095207" -> "US Weekly Platform Promotion"
 const campaignLabel = (name) => name.replace(/^\[auto-created\]\s*/i, '').replace(/_\d{10,}$/, '');
 
+// What an estimate rests on, shown under the number: the product's own per-order earning, or similar-priced orders.
+function pnlBasis(c) {
+  if (c.basis === 'product') {
+    const p = c.products.filter(x => x.profitPerOrder !== null);
+    return p.length === 1 ? `${p[0].size || 'product'} · ${money(p[0].profitPerOrder)}/order` : `${p.length} products`;
+  }
+  return c.basis === 'similar' ? 'similar-priced orders' : null;
+}
+
 function Campaigns({ campaigns }) {
+  const known = campaigns.filter(c => c.estPnl !== null);
+  const total = campaigns.reduce((t, c) => ({ cost: t.cost + c.cost, revenue: t.revenue + c.revenue, orders: t.orders + c.orders }), { cost: 0, revenue: 0, orders: 0 });
+  const totalBefore = known.reduce((n, c) => n + c.estProfitBeforeAds, 0);
+  const totalPnl = known.reduce((n, c) => n + c.estPnl, 0);
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Campaign</th><th className="r">Ad cost</th><th className="r">Ad-credited sales</th>
-            <th className="r">Orders</th><th className="r">ROAS</th><th className="r">Cost per order</th>
+            <th className="r">Orders</th><th className="r">ROAS</th>
+            <th className="r" title="Estimated: orders × what the product earns per order, before ads">Profit before ads</th>
+            <th className="r" title="Estimated profit before ads minus ad cost">Profit after ads</th>
           </tr>
         </thead>
         <tbody>
@@ -222,9 +237,24 @@ function Campaigns({ campaigns }) {
               <td className="r">{money(c.revenue, { cents: false })}</td>
               <td className="r">{c.orders.toLocaleString()}</td>
               <td className="r strong">{c.roas === null ? '—' : `${c.roas.toFixed(2)}×`}</td>
-              <td className="r">{c.costPerOrder === null ? '—' : money(c.costPerOrder)}</td>
+              <td className={`r ${c.estProfitBeforeAds === null ? 'muted' : tone(c.estProfitBeforeAds)}`}>{c.estProfitBeforeAds === null ? '—' : money(c.estProfitBeforeAds, { cents: false })}</td>
+              <td className="r">
+                <span className={`strong ${c.estPnl === null ? 'muted' : tone(c.estPnl)}`}>{c.estPnl === null ? 'not enough orders' : money(c.estPnl, { cents: false })}</span>
+                {pnlBasis(c) && <span className="kpi-sub block">{pnlBasis(c)}</span>}
+              </td>
             </tr>
           ))}
+          {campaigns.length > 1 && (
+            <tr className="total-row">
+              <td className="strong">All campaigns</td>
+              <td className="r strong">{money(total.cost, { cents: false })}</td>
+              <td className="r">{money(total.revenue, { cents: false })}</td>
+              <td className="r">{total.orders.toLocaleString()}</td>
+              <td className="r strong">{total.cost > 0 ? `${(total.revenue / total.cost).toFixed(2)}×` : '—'}</td>
+              <td className={`r ${tone(totalBefore)}`}>{known.length ? money(totalBefore, { cents: false }) : '—'}</td>
+              <td className={`r strong ${tone(totalPnl)}`}>{known.length ? money(totalPnl, { cents: false }) : '—'}</td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -387,8 +417,10 @@ function AdsRoas({ roas, breakEven, campaigns = [], dates = [], grossSales, adsS
               <h3 className="sub-h">By campaign <span className="hint">biggest spender first</span></h3>
               <Campaigns campaigns={campaigns} />
               <p className="muted pad">
-                TikTok reports return per campaign but not profit. A campaign selling the 7 lb bucket needs a much lower ROAS to break even than one selling
-                30 oz jars (see the table below). Judge each campaign by what it sells; a high ROAS on cheap jars can still lose money.
+                <strong>Profit is an estimate.</strong> TikTok reports each campaign’s cost, sales and orders but not its profit. Profit before ads is the campaign’s
+                orders times what that product earns per order in your own paid orders (after TikTok fees, creator commission, product cost and MCF). Profit after ads
+                takes off the ad cost. TikTok doesn’t split LIVE campaigns by product, so those use orders at a similar price. Free samples and TikTok account
+                charges aren’t included, so these don’t add up to your net profit.
               </p>
             </>
           )}
