@@ -163,6 +163,8 @@ function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
 
+      <AdsPayoff refresh={summary} onPick={onPickRange} />
+
       <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} campaigns={summary.adsCampaigns} dates={daily.map(d => d.date)} grossSales={totals.grossSales} adsSync={summary.adsSync} />
 
       <Quality q={q} goCosts={goCosts} />
@@ -258,6 +260,158 @@ function Campaigns({ campaigns }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+const PAYOFF_WINDOWS = [{ label: 'Last 7 days', n: 7 }, { label: 'Last 14 days', n: 14 }, { label: 'Last 30 days', n: 30 }];
+
+// Adds up a run of days: what the ads cost and brought in, what the business kept after everything, and the ROAS those
+// days needed. "Needed" is ad-credited sales over the money available for ads (profit before ads less TikTok account
+// charges), so net profit is at or above zero exactly when ROAS reaches it.
+function payoffOf(days, adDays) {
+  let revenue = 0, cost = 0, before = 0, charges = 0, spent = 0, net = 0;
+  for (const d of days) {
+    const a = adDays[d.date];
+    if (a) { revenue += a.revenue; cost += a.cost; }
+    before += d.profitBeforeAds;
+    charges += d.otherCharges;
+    spent += d.adSpend;
+    net += d.netProfit;
+  }
+  const affordable = before - charges;
+  return {
+    revenue, cost, spent, net, affordable,
+    roas: cost > 0 ? revenue / cost : null,
+    needed: affordable > 0 && revenue > 0 ? revenue / affordable : null,
+  };
+}
+
+// Rolling 7-day net profit, one point per day: above zero the ads (and everything else) were paying for themselves.
+function RollingNet({ points }) {
+  const [hover, setHover] = useState(null);
+  const W = 900, H = 200, padL = 52, padR = 12, padT = 12, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+
+  const { yMin, yMax, ticks } = useMemo(() => {
+    const vals = [...points.map(p => p.net), 0];
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const step = niceStep((hi - lo) || 1, 4);
+    lo = Math.floor(lo / step) * step;
+    hi = Math.ceil(hi / step) * step;
+    const t = [];
+    for (let v = lo; v <= hi + step / 2; v += step) t.push(v);
+    return { yMin: lo, yMax: hi, ticks: t };
+  }, [points]);
+
+  if (points.length < 2) return null;
+  const y = v => padT + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
+  const slot = iw / points.length;
+  const cx = i => padL + slot * i + slot / 2;
+  const labelEvery = Math.ceil(points.length / 8);
+  const h = hover !== null ? points[hover] : null;
+  const fmt = v => (v === null ? '—' : `${v.toFixed(2)}×`);
+
+  return (
+    <div className="chart" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rolling 7-day net profit">
+        {ticks.map(t => (
+          <g key={t}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className={t === 0 ? 'zero' : 'grid'} />
+            <text x={padL - 8} y={y(t) + 4} className="axis" textAnchor="end">{money(t, { cents: false })}</text>
+          </g>
+        ))}
+        <path d={points.map((p, i) => `${i ? 'L' : 'M'}${cx(i)},${y(p.net)}`).join(' ')} className="roas-roll" fill="none" style={{ stroke: 'var(--muted)', strokeWidth: 1.6 }} />
+        {points.map((p, i) => (
+          <circle key={p.date} cx={cx(i)} cy={y(p.net)} r={hover === i ? 5 : 3.4} className={p.net >= 0 ? 'bar-pos' : 'bar-neg'} />
+        ))}
+        {points.map((p, i) => i % labelEvery === 0 && (
+          <text key={p.date} x={cx(i)} y={H - 8} className="axis" textAnchor="middle">{shortDay(p.date)}</text>
+        ))}
+        {points.map((p, i) => (
+          <rect key={p.date} x={padL + slot * i} y={padT} width={slot} height={ih} fill="transparent"
+            onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} />
+        ))}
+      </svg>
+      {h && (
+        <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+          <strong>7 days to {shortDay(h.date)}</strong>
+          <span>Net profit <b className={tone(h.net)}>{money(h.net)}</b></span>
+          <span>Ad spend <b>{money(h.spent)}</b></span>
+          <span>ROAS <b>{fmt(h.roas)}</b></span>
+          <span>Needed <b>{fmt(h.needed)}</b></span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Are the ads paying off, and since when? Always the last full days up to yesterday, whatever range the page is set to,
+// so 7, 14 and 30 days can be compared side by side. Each row can set the page's range to that window.
+function AdsPayoff({ refresh, onPick }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const to = shiftDay(todayKey(), -1);
+  const from = shiftDay(to, -29);
+
+  useEffect(() => {
+    apiFetch(`/api/profit/summary?from=${from}&to=${to}`).then(readJson).then(setData).catch(e => setError(e.message));
+  }, [refresh, from, to]);
+
+  const { rows, points } = useMemo(() => {
+    if (!data) return { rows: [], points: [] };
+    const adDays = data.adsRoas?.days || {};
+    const daily = data.daily;
+    const rows = PAYOFF_WINDOWS.map(w => {
+      const slice = daily.slice(-w.n);
+      return { ...w, from: slice[0]?.date, to: slice.at(-1)?.date, ...payoffOf(slice, adDays) };
+    });
+    const points = [];
+    for (let i = 6; i < daily.length; i += 1) {
+      points.push({ date: daily[i].date, ...payoffOf(daily.slice(i - 6, i + 1), adDays) });
+    }
+    return { rows, points };
+  }, [data]);
+
+  if (error) return null;
+  if (!data || !rows.length) return null;
+  const noAds = !data.adsRoas || data.adsRoas.daysWithAds === 0;
+
+  return (
+    <section className="card">
+      <h2>Are the ads paying off? <span className="hint">full days up to {shortDay(to)} · net profit includes everything, ads and account charges too</span></h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Window</th><th className="r">Ad spend</th><th className="r">Ad-credited sales</th><th className="r">Ads ROAS</th>
+              <th className="r" title="The ROAS at which net profit is zero, at that window's mix of sales">ROAS needed</th>
+              <th className="r">Net profit</th><th>Verdict</th><th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.n}>
+                <td className="strong">{r.label} <span className="muted">{shortDay(r.from)} – {shortDay(r.to)}</span></td>
+                <td className="r">{money(r.spent, { cents: false })}</td>
+                <td className="r">{noAds ? '—' : money(r.revenue, { cents: false })}</td>
+                <td className="r">{r.roas === null ? '—' : `${r.roas.toFixed(2)}×`}</td>
+                <td className="r">{r.needed === null ? (r.affordable <= 0 ? 'not reachable' : '—') : `${r.needed.toFixed(2)}×`}</td>
+                <td className={`r strong ${tone(r.net)}`}>{money(r.net, { cents: false })}</td>
+                <td><span className={`tag ${r.net >= 0 ? 'good' : 'warn'}`}>{r.net >= 0 ? 'paying off' : 'not yet'}</span></td>
+                <td className="r">{onPick && <button className="link inline" onClick={() => onPick(r.from, r.to)}>View</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="sub-h">Rolling 7-day net profit <span className="hint">each dot covers the 7 days ending that day · green = paying off</span></h3>
+      <RollingNet points={points} />
+      <p className="muted pad">
+        Net profit is what the business kept after product cost, MCF, TikTok fees, creator commission, free samples, TikTok account charges and ad spend, so a window
+        is “paying off” when it is above zero. Recent days can still change while TikTok settles payouts. “View” sets the whole page to that window, including the campaign table.
+      </p>
+    </section>
   );
 }
 
