@@ -233,7 +233,7 @@ function AdsRoas({ roas, breakEven, grossSales, adsSync }) {
               </thead>
               <tbody>
                 <tr>
-                  <td className="strong">Whole shop, every order</td><td className="muted">all</td><td className="r muted">—</td>
+                  <td className="strong">Whole shop, paid orders</td><td className="muted">all</td><td className="r muted">—</td>
                   <td className="r">{breakEven.blended.marginPct === null ? '—' : `${breakEven.blended.marginPct.toFixed(1)}% of sales`}</td>
                   <td className="r strong">{shopWide === null ? 'none' : `${shopWide.toFixed(2)}×`}</td>
                   <td className={`r ${verdict(shopWide) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
@@ -254,7 +254,7 @@ function AdsRoas({ roas, breakEven, grossSales, adsSync }) {
           <p className="muted pad">
             Break-even is the sale price divided by what the sale earns before ad spend (product cost, MCF and TikTok fees already out), so a product
             that loses money before ads can’t be fixed by any ROAS. TikTok doesn’t split ad results by product here, so compare your ROAS with the row for
-            what you mostly advertise. TikTok account charges are left out.
+            what you mostly advertise. Free sample orders and TikTok account charges are left out; counting the cost of free orders raises the shop-wide figure.
           </p>
         </>
       )}
