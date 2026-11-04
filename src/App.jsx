@@ -226,7 +226,7 @@ export default function App({ user, onLogout }) {
         )}
 
         {view === 'business' && (
-          <p className="empty" style={{ padding: 16 }}>One daily profit number across TikTok, Amazon, Shopify and Walmart, before overhead. Admin only.</p>
+          <p className="empty" style={{ padding: 16 }}>One daily profit number across your sales channels (TikTok, Amazon, Shopify), before overhead. Admin only.</p>
         )}
 
         {view === 'affiliates' && (
