@@ -419,8 +419,8 @@ function AdsRoas({ roas, breakEven, campaigns = [], dates = [], grossSales, adsS
               <p className="muted pad">
                 <strong>Profit is an estimate.</strong> TikTok reports each campaign’s cost, sales and orders but not its profit. Profit before ads is the campaign’s
                 orders times what that product earns per order in your own paid orders (after TikTok fees, creator commission, product cost and MCF). Profit after ads
-                takes off the ad cost. TikTok doesn’t split LIVE campaigns by product, so those use orders at a similar price. Free samples and TikTok account
-                charges aren’t included, so these don’t add up to your net profit.
+                takes off the ad cost. Where TikTok gives no product split (it sometimes doesn’t for LIVE campaigns), the estimate uses your orders at a similar price.
+                Free samples and TikTok account charges aren’t included, so these don’t add up to your net profit.
               </p>
             </>
           )}
