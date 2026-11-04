@@ -86,7 +86,7 @@ export default function Reconcile({ range }) {
 
           {data.accountLevelByType.length > 0 && (
             <section className="card">
-              <h2>Account-level rows <span className="hint">not tied to an order, so not in profit</span></h2>
+              <h2>Account-level rows <span className="hint">not tied to an order · counted as account charges, except bill payments</span></h2>
               <TypeTable rows={data.accountLevelByType} />
               <div className="table-wrap">
                 <table>
@@ -134,7 +134,7 @@ export default function Reconcile({ range }) {
                       <td className="r">{money(s.adjustment)}</td>
                       <td className="r">{s.rowCount}</td>
                       <td className="r">{money(s.rows)}</td>
-                      <td className={`r ${tone(s.accountLevel)}`}>{money(s.accountLevel)}</td>
+                      <td className={`r ${tone(s.rowCount === 0 ? s.settlement : s.accountLevel)}`}>{money(s.rowCount === 0 ? s.settlement : s.accountLevel)}</td>
                       <td className="r">{Math.abs(s.gap) < 0.005 ? '—' : <span className="tag bad">{money(s.gap)}</span>}</td>
                     </tr>
                   ))}
@@ -165,7 +165,7 @@ function EmptyStatements({ e }) {
       <p className="muted">
         {Math.abs(biggest[1]) < 0.005
           ? 'TikTok’s own split for these statements shows nothing under revenue, fees, shipping or adjustments, so it doesn’t say what they are.'
-          : `Most of it sits under ${biggest[0].toLowerCase()}. These aren’t tied to any order, so profit doesn’t include them.`}
+          : `Most of it sits under ${biggest[0].toLowerCase()}. These aren’t tied to any order. They are counted in net profit as TikTok account charges.`}
       </p>
     </section>
   );
@@ -184,7 +184,7 @@ function Verdict({ data, clean, accountLevel, gap }) {
       {Math.abs(accountLevel) >= 0.005 && (
         <p className={accountLevel < 0 ? 'neg' : 'pos'}>
           The statements include {money(Math.abs(accountLevel))} of account-level {accountLevel < 0 ? 'charges' : 'credits'} with no order attached.
-          Profit doesn’t include them, so over these statements it is {accountLevel < 0 ? 'overstated' : 'understated'} by {money(Math.abs(data.profitOverstatedBy))}.
+          They are counted in net profit as TikTok account charges, dated by the statement. Paying down a negative balance is left out as a transfer.
         </p>
       )}
       {Math.abs(gap) >= 0.005 && (

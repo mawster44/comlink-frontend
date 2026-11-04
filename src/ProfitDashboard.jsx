@@ -77,7 +77,7 @@ export default function ProfitDashboard() {
         <div>
           <h1>Profit</h1>
           <p className="profit-sub">
-            TikTok Shop payout − product cost − MCF fees − ad spend · days in Denver time
+            TikTok Shop payout − product cost − MCF fees − ad spend − account charges · days in Denver time
             {summary && <> · last synced {timeAgo(summary.lastSync?.at)}</>}
           </p>
           {summary && <AdsStatus ads={summary.adsSync} />}
@@ -139,7 +139,7 @@ function AdsStatus({ ads }) {
 /* ---------- Overview ---------- */
 
 function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
-  const { totals, daily, bySku, dataQuality: q, free, fulfillment } = summary;
+  const { totals, daily, bySku, dataQuality: q, free, fulfillment, accountCharges, range } = summary;
   const adShare = totals.profitBeforeAds > 0 ? (totals.adSpend / totals.profitBeforeAds) * 100 : null;
 
   return (
@@ -153,6 +153,8 @@ function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
         <Kpi label="Profit before ads" value={money(totals.profitBeforeAds)} cls={tone(totals.profitBeforeAds)} />
         <Kpi label="Ad spend" value={money(-totals.adSpend)}
           sub={adShare === null ? null : `${adShare.toFixed(0)}% of pre-ad profit`} />
+        <Kpi label="TikTok account charges" value={money(-totals.otherCharges)}
+          sub={accountCharges?.credits > 0 ? `${money(accountCharges.charges, { cents: false })} charges, ${money(accountCharges.credits, { cents: false })} credits` : 'FBT warehouse fees'} />
         <Kpi label="Orders" value={totals.orders.toLocaleString()}
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
@@ -169,6 +171,8 @@ function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
       </section>
 
       <TakeBreakdown daily={daily} />
+
+      <AccountCharges data={accountCharges} from={range.from} />
 
       <section className="card">
         <h2>Daily P&amp;L <span className="hint">click an ad spend amount to edit it</span></h2>
@@ -365,6 +369,48 @@ function niceStep(range, target) {
   return (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
 }
 
+const chargeLabel = (kind) => (kind === 'ADJUSTMENT_WITHOUT_ORDER'
+  ? 'Adjustments with no order (FBT warehouse fees)'
+  : kind.replace(/_/g, ' ').toLowerCase());
+
+// Charges and credits on TikTok statements that belong to no order. They are in net profit, dated by the statement.
+function AccountCharges({ data, from }) {
+  if (!data || (!data.kinds.length && !data.transfersExcluded.length)) return null;
+  const partial = data.coverageStarts && from < data.coverageStarts;
+  return (
+    <section className="card">
+      <h2>TikTok account charges <span className="hint">not on any order · in net profit, dated by the statement</span></h2>
+      {partial && (
+        <div className="note bad">
+          Statements before {shortDay(data.coverageStarts)} haven’t been synced, so charges before then are missing from this range.
+        </div>
+      )}
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>What</th><th className="r">Statements</th><th className="r">Amount</th></tr></thead>
+          <tbody>
+            {data.kinds.map(k => (
+              <tr key={k.kind}>
+                <td>{chargeLabel(k.kind)}</td>
+                <td className="r">{k.count}</td>
+                <td className={`r ${tone(k.amount)}`}>{money(k.amount)}</td>
+              </tr>
+            ))}
+            {data.transfersExcluded.map(k => (
+              <tr key={k.kind} className="muted">
+                <td>{chargeLabel(k.kind)} <span className="tag">not counted</span></td>
+                <td className="r">{k.count}</td>
+                <td className="r">{money(k.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted">Paying down a negative balance moves money rather than earning it, so it is left out. Charges affect daily net profit, not any product’s margin.</p>
+    </section>
+  );
+}
+
 const sumOf = (daily, key) => daily.reduce((n, d) => n + (d[key] || 0), 0);
 
 // Sale price → payout. TikTok has already taken these out of the payout, so they explain it rather than reduce profit again.
@@ -414,6 +460,7 @@ function DailyTable({ daily, onChanged }) {
             )}
             <th className="r">Payout</th>
             <th className="r">Cost</th><th className="r">Before ads</th><th className="r">Ad spend</th>
+            <th className="r" title="FBT warehouse fees and other TikTok charges tied to no order">TikTok charges</th>
             <th className="r">Net profit</th><th className="r">Margin</th>
           </tr>
         </thead>
@@ -436,6 +483,7 @@ function DailyTable({ daily, onChanged }) {
               <td className="r" title={d.mcfFees > 0 ? `${money(d.cogs)} product + ${money(d.mcfFees)} MCF` : undefined}>{money(-(d.cogs + d.mcfFees))}</td>
               <td className={`r ${tone(d.profitBeforeAds)}`}>{money(d.profitBeforeAds)}</td>
               <td className="r"><AdCell date={d.date} amount={d.adSpend} onSaved={onChanged} /></td>
+              <td className="r">{money(-d.otherCharges)}</td>
               <td className={`r strong ${tone(d.netProfit)}`}>{money(d.netProfit)}</td>
               <td className="r">{pct(d.marginPct)}</td>
             </tr>
