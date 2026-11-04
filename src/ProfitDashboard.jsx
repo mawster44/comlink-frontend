@@ -163,7 +163,7 @@ function Overview({ summary, onChanged, onPickRange, goCosts, goFree, goSeller }
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
 
-      <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} grossSales={totals.grossSales} adsSync={summary.adsSync} />
+      <AdsRoas roas={summary.adsRoas} breakEven={summary.breakEven} campaigns={summary.adsCampaigns} grossSales={totals.grossSales} adsSync={summary.adsSync} />
 
       <Quality q={q} goCosts={goCosts} />
 
@@ -197,9 +197,44 @@ const SHIPS = { tiktok: 'TikTok ships', seller: 'We ship (MCF)', unknown: 'Unkno
 
 // What TikTok credits to the ads, against the return an ad needs to pay for itself. An ad can only spend what a sale
 // earns before ads, so break-even ROAS is the sale price over that earning.
-function AdsRoas({ roas, breakEven, grossSales, adsSync }) {
+// "[Auto-created] US Weekly Platform Promotion_20261020095207" -> "US Weekly Platform Promotion"
+const campaignLabel = (name) => name.replace(/^\[auto-created\]\s*/i, '').replace(/_\d{10,}$/, '');
+
+function Campaigns({ campaigns }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Campaign</th><th className="r">Ad cost</th><th className="r">Ad-credited sales</th>
+            <th className="r">Orders</th><th className="r">ROAS</th><th className="r">Cost per order</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map(c => (
+            <tr key={c.id}>
+              <td>
+                {campaignLabel(c.name)}
+                {c.auto && <span className="tag" title="TikTok created this campaign automatically">auto-created</span>}
+                {c.kind === 'live' && <span className="tag">live</span>}
+              </td>
+              <td className="r">{money(c.cost, { cents: false })} <span className="muted">({c.spendSharePct === null ? '—' : `${c.spendSharePct.toFixed(0)}%`})</span></td>
+              <td className="r">{money(c.revenue, { cents: false })}</td>
+              <td className="r">{c.orders.toLocaleString()}</td>
+              <td className="r strong">{c.roas === null ? '—' : `${c.roas.toFixed(2)}×`}</td>
+              <td className="r">{c.costPerOrder === null ? '—' : money(c.costPerOrder)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AdsRoas({ roas, breakEven, campaigns = [], grossSales, adsSync }) {
   if (!roas || !breakEven) return null;
   const pullError = adsSync?.attribution?.error;
+  const campaignError = adsSync?.campaigns?.error;
   const shopWide = breakEven.blended.roas;
   const groups = breakEven.groups.filter(g => g.orders >= 5);
   const verdict = (be) => (be === null ? null : roas.roas >= be ? 'pos' : 'neg');
@@ -223,11 +258,24 @@ function AdsRoas({ roas, breakEven, grossSales, adsSync }) {
             <Kpi label="Cost per ad order" value={roas.costPerOrder === null ? '—' : money(roas.costPerOrder)} />
           </div>
 
+          {campaignError && <div className="note bad">Campaign breakdown pull failed: {campaignError}</div>}
+          {campaigns.length > 0 && (
+            <>
+              <h3 className="sub-h">By campaign <span className="hint">biggest spender first</span></h3>
+              <Campaigns campaigns={campaigns} />
+              <p className="muted pad">
+                TikTok reports return per campaign but not profit. A campaign selling the 7 lb bucket needs a much lower ROAS to break even than one selling
+                30 oz jars (see the table below). Judge each campaign by what it sells; a high ROAS on cheap jars can still lose money.
+              </p>
+            </>
+          )}
+
+          <h3 className="sub-h">Break-even by product</h3>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Break-even by product</th><th>Shipped</th><th className="r">Avg price</th>
+                  <th>Product</th><th>Shipped</th><th className="r">Avg price</th>
                   <th className="r">Earns before ads</th><th className="r">Break-even ROAS</th><th className="r">Your ROAS</th>
                 </tr>
               </thead>

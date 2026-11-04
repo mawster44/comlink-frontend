@@ -220,3 +220,5 @@ h2 > .tag { margin-left: 0; }
 
 /* Ads return card */
 .roas-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.sub-h { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; display: flex; align-items: center; gap: 10px; }
+.sub-h .hint { text-transform: none; letter-spacing: 0; }
