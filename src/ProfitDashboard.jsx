@@ -154,7 +154,7 @@ function Overview({ summary, onChanged, goCosts, goFree, goSeller }) {
         <Kpi label="Ad spend" value={money(-totals.adSpend)}
           sub={adShare === null ? null : `${adShare.toFixed(0)}% of pre-ad profit`} />
         <Kpi label="TikTok account charges" value={money(-totals.otherCharges)}
-          sub={accountCharges?.credits > 0 ? `${money(accountCharges.charges, { cents: false })} charges, ${money(accountCharges.credits, { cents: false })} credits` : 'FBT warehouse fees'} />
+          sub={accountCharges?.credits > 0 ? `${money(accountCharges.charges, { cents: false })} charges, ${money(accountCharges.credits, { cents: false })} credits` : 'FBT warehouse service fees'} />
         <Kpi label="Orders" value={totals.orders.toLocaleString()}
           sub={totals.orders ? `${money(totals.netProfit / totals.orders)} net each` : null} />
       </section>
@@ -369,9 +369,16 @@ function niceStep(range, target) {
   return (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
 }
 
-const chargeLabel = (kind) => (kind === 'ADJUSTMENT_WITHOUT_ORDER'
-  ? 'Adjustments with no order (FBT warehouse fees)'
-  : kind.replace(/_/g, ' ').toLowerCase());
+const CHARGE_LABELS = {
+  GMV_DEDUCTION_FOR_FBT_WAREHOUSE_SERVICE_FEE: 'FBT warehouse service fee',
+  GMV_PAYMENT_FOR_TIKTOK_ADS: 'TikTok ads paid from the sales balance',
+  ADJUSTMENT_WITHOUT_ORDER: 'Adjustments TikTok didn’t describe',
+};
+const chargeLabel = (kind) => CHARGE_LABELS[kind] || kind.replace(/_/g, ' ').toLowerCase();
+const EXCLUDED_WHY = {
+  transfer: 'moves money, not profit',
+  ads: 'already counted in ad spend',
+};
 
 // Charges and credits on TikTok statements that belong to no order. They are in net profit, dated by the statement.
 function AccountCharges({ data, from }) {
@@ -398,7 +405,7 @@ function AccountCharges({ data, from }) {
             ))}
             {data.transfersExcluded.map(k => (
               <tr key={k.kind} className="muted">
-                <td>{chargeLabel(k.kind)} <span className="tag">not counted</span></td>
+                <td>{chargeLabel(k.kind)} <span className="tag" title={EXCLUDED_WHY[k.reason]}>not counted · {EXCLUDED_WHY[k.reason] || 'excluded'}</span></td>
                 <td className="r">{k.count}</td>
                 <td className="r">{money(k.amount)}</td>
               </tr>
@@ -406,7 +413,7 @@ function AccountCharges({ data, from }) {
           </tbody>
         </table>
       </div>
-      <p className="muted">Paying down a negative balance moves money rather than earning it, so it is left out. Charges affect daily net profit, not any product’s margin.</p>
+      <p className="muted">Bill payments toward a negative balance move money rather than earn it, and ad top-ups from the sales balance fund spend that is already in ad spend, so both are left out. Charges affect daily net profit, not any product’s margin.</p>
     </section>
   );
 }

@@ -86,7 +86,7 @@ export default function Reconcile({ range }) {
 
           {data.accountLevelByType.length > 0 && (
             <section className="card">
-              <h2>Account-level rows <span className="hint">not tied to an order · counted as account charges, except bill payments</span></h2>
+              <h2>Account-level rows <span className="hint">not tied to an order · counted as account charges, except bill payments and ad top-ups</span></h2>
               <TypeTable rows={data.accountLevelByType} />
               <div className="table-wrap">
                 <table>
@@ -165,7 +165,7 @@ function EmptyStatements({ e }) {
       <p className="muted">
         {Math.abs(biggest[1]) < 0.005
           ? 'TikTok’s own split for these statements shows nothing under revenue, fees, shipping or adjustments, so it doesn’t say what they are.'
-          : `Most of it sits under ${biggest[0].toLowerCase()}. These aren’t tied to any order. They are counted in net profit as TikTok account charges.`}
+          : `Most of it sits under ${biggest[0].toLowerCase()}. TikTok’s newer endpoint couldn’t describe these, so they are counted in net profit as generic account charges.`}
       </p>
     </section>
   );
@@ -184,7 +184,7 @@ function Verdict({ data, clean, accountLevel, gap }) {
       {Math.abs(accountLevel) >= 0.005 && (
         <p className={accountLevel < 0 ? 'neg' : 'pos'}>
           The statements include {money(Math.abs(accountLevel))} of account-level {accountLevel < 0 ? 'charges' : 'credits'} with no order attached.
-          They are counted in net profit as TikTok account charges, dated by the statement. Paying down a negative balance is left out as a transfer.
+          They are counted in net profit as TikTok account charges, dated by the statement. Bill payments and ad top-ups from the sales balance are left out, since neither is a new cost.
         </p>
       )}
       {Math.abs(gap) >= 0.005 && (
