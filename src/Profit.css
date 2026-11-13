@@ -10,6 +10,8 @@
   gap: 16px;
 }
 
+/* The page is a scrolling column; without this a block that scrolls sideways itself (tab strip, card row) is squashed to nothing. */
+.profit > * { flex-shrink: 0; }
 .profit h1 { font-size: 22px; font-weight: 600; }
 .profit h2 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .profit .muted { color: var(--muted); font-size: 13px; }
@@ -198,7 +200,7 @@ h2 > .tag { margin-left: 0; }
 .snap-lastMonth .snap-title { background: rgba(110, 175, 90, 0.26); }
 .snap-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .snap-body > div, .snap-row > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.snap-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.snap-body > .snap-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .snap-big { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .snap-net { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .snap em { font-style: normal; font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; margin-left: 4px; }
@@ -238,3 +240,123 @@ h2 > .tag { margin-left: 0; }
 .kpi-sub.block { display: block; font-size: 11px; font-weight: 400; }
 .profit tr.total-row td { border-top: 1px solid var(--border); }
 .tag.good { background: rgba(61, 220, 151, 0.15); color: var(--good); }
+
+/* Phones. The page is one column with slimmer padding, the controls stack, the tab strip and the table scroll sideways instead
+   of squeezing, the snapshot cards become a swipeable row, and inputs are 16px so iOS doesn't zoom into them on focus. */
+@media (max-width: 768px) {
+  .profit { padding: 14px 12px calc(32px + env(safe-area-inset-bottom)); gap: 12px; -webkit-overflow-scrolling: touch; }
+  /* The active tab in the top bar already says which page this is, so the title and the formula line are left out. */
+  .profit-head h1, .profit-sub .formula { display: none; }
+  .profit-sub { font-size: 12px; line-height: 1.45; margin-top: 0; }
+  .profit-sub.ads-status:not(.neg) { display: none; }
+
+  .profit-head { flex-direction: column; align-items: stretch; gap: 8px; }
+  .profit-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+  .profit-controls .seg { grid-column: 1 / -1; }
+  .profit-controls .seg button { flex: 1; padding: 10px 0; }
+  .profit-controls button.primary { grid-column: 1 / -1; padding: 11px 14px; }
+  .profit input[type='date'], .profit input[type='number'], .profit .search, .profit select { font-size: 16px; padding: 10px; min-width: 0; }
+  .profit input[type='date'] { width: 100%; }
+
+  .tabs { overflow-x: auto; flex-wrap: nowrap; margin: 0 -12px; padding: 0 12px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 0 0 auto; padding: 11px 13px; }
+
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpis .kpi.big { grid-column: 1 / -1; }
+  .kpi { padding: 11px 12px; }
+  .kpi-value { font-size: 18px; }
+  .kpi.big .kpi-value { font-size: 28px; }
+  .roas-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .roas-kpis .kpi.big { grid-column: 1 / -1; }
+
+  .card { padding: 14px 12px; }
+  .profit h2 { font-size: 15px; margin-bottom: 10px; row-gap: 2px; }
+  .profit h2 .hint { flex-basis: 100%; }
+  .legend { margin-left: 0; }
+  .sub-h { flex-wrap: wrap; }
+  .sub-h .legend { margin-left: 0; }
+
+  .snap-grid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 10px;
+    margin: 0 -12px;
+    padding: 0 12px 4px;
+    scroll-padding: 0 12px;
+    scrollbar-width: none;
+  }
+  .snap-grid::-webkit-scrollbar { display: none; }
+  .snap { flex: 0 0 82%; scroll-snap-align: start; }
+  .snap-head { gap: 8px; align-items: flex-start; }
+  .snap-head .muted { font-size: 12px; }
+  .link-btn { white-space: nowrap; padding: 4px 2px; }
+
+  .biz-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .biz-cards > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .biz-big { font-size: 22px; }
+  .biz-card { padding: 11px 12px; }
+  .biz-form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; }
+  .biz-form select, .biz-form input[type='number'], .biz-form .search, .biz-form button { grid-column: 1 / -1; width: 100%; margin-left: 0; }
+  .biz-form button { padding: 11px; }
+
+  .free-grid, .free-grid.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .search { margin-left: 0; width: 100%; }
+  .cost-form { align-items: stretch; }
+  .cost-form label { flex: 1 1 140px; }
+  .cost-form label select { min-width: 0; width: 100%; }
+  .prod { max-width: 200px; }
+
+  /* Tables scroll sideways, edge to edge in their card, with the first column pinned so a row never loses its label. */
+  .table-wrap { margin: 0 -12px; padding: 0 12px; -webkit-overflow-scrolling: touch; }
+  .profit table { font-size: 12px; }
+  .profit th, .profit td { padding: 7px 8px; }
+  .table-wrap table th:first-child, .table-wrap table td:first-child {
+    position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 1px 0 0 var(--border);
+  }
+  .profit tbody tr:hover td:first-child { background: var(--surface); }
+  .tip { font-size: 11px; padding: 6px 8px; }
+}
+
+/* Tables marked "stack" become a card per row on a phone: the label on top, the figures in two columns. */
+@media (max-width: 768px) {
+  .table-wrap:has(table.stack) { margin: 0; padding: 0; overflow: visible; }
+  table.stack, table.stack tbody { display: block; }
+  table.stack thead { display: none; }
+  table.stack tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  table.stack tbody tr:last-child { border-bottom: none; }
+  table.stack tbody tr:hover { background: none; }
+  table.stack td { display: block; padding: 0; border: none; white-space: normal; text-align: left; font-size: 14px; }
+  table.stack td.r { text-align: left; }
+  table.stack td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 1px; color: var(--muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .table-wrap table.stack td:first-child { grid-column: 1 / -1; position: static; box-shadow: none; background: none; max-width: none; min-width: 0; font-size: 14px; }
+  table.stack tr.total-row td { border-top: none; }
+}
+
+/* Wide tables show only the columns that matter on a phone (marked hide-sm) unless "show every column" is ticked. */
+.profit .only-sm { display: none; }
+@media (max-width: 768px) {
+  .profit .only-sm { display: block; }
+  .profit table.compact .hide-sm, .profit .hide-sm.take-toggle { display: none; }
+  .profit table.compact { table-layout: auto; }
+}
+.tag .short { display: none; }
+@media (max-width: 768px) {
+  table.compact .tag .long { display: none; }
+  table.compact .tag .short { display: inline; }
+  table.compact .tag { margin-left: 6px; padding: 1px 5px; }
+}
+@media (max-width: 768px) {
+  .today-tag { display: none; }
+  .profit-controls button.primary:only-child { padding: 9px 14px; }
+}
+.profit .only-compact { display: none; }
+@media (max-width: 768px) {
+  .profit table.compact .only-compact { display: inline-block; }
+  .profit table.compact code { font-size: 10px; }
+}
+@media (max-width: 768px) {
+  /* Order IDs are 18 digits; the last eight are enough to recognise one, and searching still takes the whole ID. */
+  .profit table.compact .id-head { display: none; }
+}

@@ -61,6 +61,11 @@ export default function App({ user, onLogout }) {
     if (activeId) { fetchActive(activeId); fetchCrm(activeId); setDraft(''); setError(null); }
   }, [activeId]);
 
+  // The view switcher scrolls sideways on a phone; keep the active view in sight.
+  useEffect(() => {
+    document.querySelector('.toggle-btn.active')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [view]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [active?.messages]);
@@ -139,7 +144,7 @@ export default function App({ user, onLogout }) {
   const selectedModel = MODELS.find(m => m.id === model);
 
   return (
-    <div className="layout">
+    <div className={`layout view-${view}`}>
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="logo">

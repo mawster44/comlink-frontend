@@ -501,3 +501,48 @@
   white-space: pre-wrap;
   line-height: 1.5;
 }
+
+/* Phones: the Profit and Business views get the whole screen. The sidebar becomes a slim bar along the top (logo, settings,
+   sign out and the view switcher) instead of taking 300px of a 375px screen. */
+@media (max-width: 768px) {
+  .layout.view-profit,
+  .layout.view-business {
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  .layout.view-profit .sidebar,
+  .layout.view-business .sidebar {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .layout.view-profit .sidebar-header,
+  .layout.view-business .sidebar-header { flex: 1 1 auto; padding: 8px 8px 4px 14px; border-bottom: none; }
+  .layout.view-profit .user-bar,
+  .layout.view-business .user-bar { flex: 0 0 auto; padding: 8px 12px 4px 0; border-bottom: none; }
+  .layout.view-profit .user-name,
+  .layout.view-business .user-name { display: none; }
+  .layout.view-profit .view-toggle,
+  .layout.view-business .view-toggle {
+    flex: 0 0 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px 12px 10px;
+    border-bottom: none;
+    scrollbar-width: none;
+  }
+  .layout.view-profit .view-toggle::-webkit-scrollbar,
+  .layout.view-business .view-toggle::-webkit-scrollbar { display: none; }
+  .layout.view-profit .toggle-btn,
+  .layout.view-business .toggle-btn { flex: 0 0 auto; padding: 8px 14px; font-size: 13px; }
+  .layout.view-profit .sidebar > .empty,
+  .layout.view-business .sidebar > .empty { display: none; }
+  .layout.view-profit .main,
+  .layout.view-business .main { min-height: 0; width: 100%; }
+}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from './auth.js';
 import { todayKey, shiftDay, money, tone, shortDay, timeAgo, readJson } from './profitFormat.js';
+import { useMedia, PHONE } from './useMedia.js';
 import './Profit.css';
 
 const WINDOW_DAYS = 60; // how far back the page loads; the cards and the table are all cut from this
@@ -66,8 +67,8 @@ export default function BusinessDashboard() {
         <div>
           <h1>Business profit</h1>
           <div className="profit-sub">
-            What we keep after product cost, fees, shipping and ad spend, before overhead. An estimate for checking in, not the books.
-            {data?.lastSync && <> TikTok last synced {timeAgo(data.lastSync)}.</>}
+            <span className="formula">What we keep after product cost, fees, shipping and ad spend, before overhead. An estimate for checking in, not the books. </span>
+            {data?.lastSync && <>TikTok last synced {timeAgo(data.lastSync)}.</>}
           </div>
         </div>
         <div className="profit-controls">
@@ -119,6 +120,8 @@ function PeriodCard({ card, channels }) {
 }
 
 function DailyTable({ days, channels, today }) {
+  const phone = useMedia(PHONE);
+  const fmt = (n) => money(n, { cents: !phone }); // whole dollars on a phone so every column fits
   const rows = days.filter(d => d.date >= shiftDay(today, -29)).slice().reverse();
   return (
     <div className="card">
@@ -135,13 +138,13 @@ function DailyTable({ days, channels, today }) {
           <tbody>
             {rows.map(d => (
               <tr key={d.date} className={d.missing.length === channels.length ? 'dim' : ''}>
-                <td>{shortDay(d.date)}{d.date === today && <span className="muted"> · today</span>}</td>
+                <td>{shortDay(d.date)}{d.date === today && <span className="muted today-tag"> · today</span>}</td>
                 {channels.map(c => (
                   <td key={c.id} className={`r ${d.channels[c.id] === null ? 'muted' : tone(d.channels[c.id])}`}>
-                    {d.channels[c.id] === null ? '—' : money(d.channels[c.id])}
+                    {d.channels[c.id] === null ? '—' : fmt(d.channels[c.id])}
                   </td>
                 ))}
-                <td className={`r strong ${tone(d.total)}`}>{money(d.total)}{d.missing.length > 0 && d.missing.length < channels.length && <span className="muted" title={`No figure for ${d.missing.join(', ')}`}> *</span>}</td>
+                <td className={`r strong ${tone(d.total)}`}>{fmt(d.total)}{d.missing.length > 0 && d.missing.length < channels.length && <span className="muted" title={`No figure for ${d.missing.join(', ')}`}> *</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -212,9 +215,9 @@ function Entries({ entries, onChange }) {
 
       {entries.length > 0 && (
         <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table>
+          <table className="compact">
             <thead>
-              <tr><th>Channel</th><th>Period</th><th className="r">Profit</th><th className="r">Per day</th><th>Note</th><th /></tr>
+              <tr><th>Channel</th><th>Period</th><th className="r">Profit</th><th className="r hide-sm">Per day</th><th className="hide-sm">Note</th><th /></tr>
             </thead>
             <tbody>
               {[...entries].reverse().map(e => {
@@ -224,8 +227,8 @@ function Entries({ entries, onChange }) {
                     <td>{MANUAL.find(c => c.id === e.channel)?.label ?? e.channel}</td>
                     <td>{e.from === e.to ? shortDay(e.from) : `${shortDay(e.from)} – ${shortDay(e.to)}`}</td>
                     <td className={`r ${tone(e.amount)}`}>{money(e.amount)}</td>
-                    <td className="r muted">{money(e.amount / days)}</td>
-                    <td className="muted">{e.note}</td>
+                    <td className="r muted hide-sm">{money(e.amount / days)}</td>
+                    <td className="muted hide-sm">{e.note}</td>
                     <td className="r"><button className="link inline" onClick={() => remove(e.id)}>Remove</button></td>
                   </tr>
                 );

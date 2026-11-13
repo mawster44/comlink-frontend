@@ -5,6 +5,7 @@ import PriceTest from './PriceTest.jsx';
 import McfActuals from './McfActuals.jsx';
 import Reconcile from './Reconcile.jsx';
 import Snapshot from './Snapshot.jsx';
+import { useChartWidth, chartBox, maxLabels, tipLeft } from './useChartWidth.js';
 import './Profit.css';
 
 const PRESETS = [
@@ -78,8 +79,8 @@ export default function ProfitDashboard() {
         <div>
           <h1>Profit</h1>
           <p className="profit-sub">
-            TikTok Shop payout − product cost − MCF fees − ad spend − account charges · days in Denver time
-            {summary && <> · last synced {timeAgo(summary.lastSync?.at)}</>}
+            <span className="formula">TikTok Shop payout − product cost − MCF fees − ad spend − account charges · days in Denver time · </span>
+            {summary ? <>last synced {timeAgo(summary.lastSync?.at)}</> : 'loading…'}
           </p>
           {summary && <AdsStatus ads={summary.adsSync} />}
         </div>
@@ -218,7 +219,7 @@ function Campaigns({ campaigns }) {
   const totalPnl = known.reduce((n, c) => n + c.estPnl, 0);
   return (
     <div className="table-wrap">
-      <table>
+      <table className="stack">
         <thead>
           <tr>
             <th>Campaign</th><th className="r">Ad cost</th><th className="r">Ad-credited sales</th>
@@ -235,12 +236,12 @@ function Campaigns({ campaigns }) {
                 {c.auto && <span className="tag" title="TikTok created this campaign automatically">auto-created</span>}
                 {c.kind === 'live' && <span className="tag">live</span>}
               </td>
-              <td className="r">{money(c.cost, { cents: false })} <span className="muted">({c.spendSharePct === null ? '—' : `${c.spendSharePct.toFixed(0)}%`})</span></td>
-              <td className="r">{money(c.revenue, { cents: false })}</td>
-              <td className="r">{c.orders.toLocaleString()}</td>
-              <td className="r strong">{c.roas === null ? '—' : `${c.roas.toFixed(2)}×`}</td>
-              <td className={`r ${c.estProfitBeforeAds === null ? 'muted' : tone(c.estProfitBeforeAds)}`}>{c.estProfitBeforeAds === null ? '—' : money(c.estProfitBeforeAds, { cents: false })}</td>
-              <td className="r">
+              <td className="r" data-label="Ad cost">{money(c.cost, { cents: false })} <span className="muted">({c.spendSharePct === null ? '—' : `${c.spendSharePct.toFixed(0)}%`})</span></td>
+              <td className="r" data-label="Ad-credited sales">{money(c.revenue, { cents: false })}</td>
+              <td className="r" data-label="Orders">{c.orders.toLocaleString()}</td>
+              <td className="r strong" data-label="ROAS">{c.roas === null ? '—' : `${c.roas.toFixed(2)}×`}</td>
+              <td className={`r ${c.estProfitBeforeAds === null ? 'muted' : tone(c.estProfitBeforeAds)}`} data-label="Profit before ads">{c.estProfitBeforeAds === null ? '—' : money(c.estProfitBeforeAds, { cents: false })}</td>
+              <td className="r" data-label="Profit after ads">
                 <span className={`strong ${c.estPnl === null ? 'muted' : tone(c.estPnl)}`}>{c.estPnl === null ? 'not enough orders' : money(c.estPnl, { cents: false })}</span>
                 {pnlBasis(c) && <span className="kpi-sub block">{pnlBasis(c)}</span>}
               </td>
@@ -249,12 +250,12 @@ function Campaigns({ campaigns }) {
           {campaigns.length > 1 && (
             <tr className="total-row">
               <td className="strong">All campaigns</td>
-              <td className="r strong">{money(total.cost, { cents: false })}</td>
-              <td className="r">{money(total.revenue, { cents: false })}</td>
-              <td className="r">{total.orders.toLocaleString()}</td>
-              <td className="r strong">{total.cost > 0 ? `${(total.revenue / total.cost).toFixed(2)}×` : '—'}</td>
-              <td className={`r ${tone(totalBefore)}`}>{known.length ? money(totalBefore, { cents: false }) : '—'}</td>
-              <td className={`r strong ${tone(totalPnl)}`}>{known.length ? money(totalPnl, { cents: false }) : '—'}</td>
+              <td className="r strong" data-label="Ad cost">{money(total.cost, { cents: false })}</td>
+              <td className="r" data-label="Ad-credited sales">{money(total.revenue, { cents: false })}</td>
+              <td className="r" data-label="Orders">{total.orders.toLocaleString()}</td>
+              <td className="r strong" data-label="ROAS">{total.cost > 0 ? `${(total.revenue / total.cost).toFixed(2)}×` : '—'}</td>
+              <td className={`r ${tone(totalBefore)}`} data-label="Profit before ads">{known.length ? money(totalBefore, { cents: false }) : '—'}</td>
+              <td className={`r strong ${tone(totalPnl)}`} data-label="Profit after ads">{known.length ? money(totalPnl, { cents: false }) : '—'}</td>
             </tr>
           )}
         </tbody>
@@ -289,7 +290,9 @@ function payoffOf(days, adDays) {
 // Rolling 7-day net profit, one point per day: above zero the ads (and everything else) were paying for themselves.
 function RollingNet({ points }) {
   const [hover, setHover] = useState(null);
-  const W = 900, H = 200, padL = 52, padR = 12, padT = 12, padB = 26;
+  const [boxRef, W] = useChartWidth();
+  const { H, padL } = chartBox(W, { tall: 200, short: 180 });
+  const padR = 12, padT = 12, padB = 26;
   const iw = W - padL - padR, ih = H - padT - padB;
 
   const { yMin, yMax, ticks } = useMemo(() => {
@@ -307,12 +310,12 @@ function RollingNet({ points }) {
   const y = v => padT + ih - ((v - yMin) / (yMax - yMin || 1)) * ih;
   const slot = iw / points.length;
   const cx = i => padL + slot * i + slot / 2;
-  const labelEvery = Math.ceil(points.length / 8);
+  const labelEvery = Math.ceil(points.length / Math.min(8, maxLabels(iw)));
   const h = hover !== null ? points[hover] : null;
   const fmt = v => (v === null ? '—' : `${v.toFixed(2)}×`);
 
   return (
-    <div className="chart" onMouseLeave={() => setHover(null)}>
+    <div className="chart" ref={boxRef} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rolling 7-day net profit">
         {ticks.map(t => (
           <g key={t}>
@@ -333,7 +336,7 @@ function RollingNet({ points }) {
         ))}
       </svg>
       {h && (
-        <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+        <div className="tip" style={{ left: tipLeft(cx(hover), W) }}>
           <strong>7 days to {shortDay(h.date)}</strong>
           <span>Net profit <b className={tone(h.net)}>{money(h.net)}</b></span>
           <span>Ad spend <b>{money(h.spent)}</b></span>
@@ -380,7 +383,7 @@ function AdsPayoff({ refresh, onPick }) {
     <section className="card">
       <h2>Are the ads paying off? <span className="hint">full days up to {shortDay(to)} · net profit includes everything, ads and account charges too</span></h2>
       <div className="table-wrap">
-        <table>
+        <table className="stack">
           <thead>
             <tr>
               <th>Window</th><th className="r">Ad spend</th><th className="r">Ad-credited sales</th><th className="r">Ads ROAS</th>
@@ -392,11 +395,11 @@ function AdsPayoff({ refresh, onPick }) {
             {rows.map(r => (
               <tr key={r.n}>
                 <td className="strong">{r.label} <span className="muted">{shortDay(r.from)} – {shortDay(r.to)}</span></td>
-                <td className="r">{money(r.spent, { cents: false })}</td>
-                <td className="r">{noAds ? '—' : money(r.revenue, { cents: false })}</td>
-                <td className="r">{r.roas === null ? '—' : `${r.roas.toFixed(2)}×`}</td>
-                <td className="r">{r.needed === null ? (r.affordable <= 0 ? 'not reachable' : '—') : `${r.needed.toFixed(2)}×`}</td>
-                <td className={`r strong ${tone(r.net)}`}>{money(r.net, { cents: false })}</td>
+                <td className="r" data-label="Ad spend">{money(r.spent, { cents: false })}</td>
+                <td className="r" data-label="Ad-credited sales">{noAds ? '—' : money(r.revenue, { cents: false })}</td>
+                <td className="r" data-label="Ads ROAS">{r.roas === null ? '—' : `${r.roas.toFixed(2)}×`}</td>
+                <td className="r" data-label="ROAS needed">{r.needed === null ? (r.affordable <= 0 ? 'not reachable' : '—') : `${r.needed.toFixed(2)}×`}</td>
+                <td className={`r strong ${tone(r.net)}`} data-label="Net profit">{money(r.net, { cents: false })}</td>
                 <td><span className={`tag ${r.net >= 0 ? 'good' : 'warn'}`}>{r.net >= 0 ? 'paying off' : 'not yet'}</span></td>
                 <td className="r">{onPick && <button className="link inline" onClick={() => onPick(r.from, r.to)}>View</button>}</td>
               </tr>
@@ -431,7 +434,9 @@ function pathOf(points) {
 // below a dashed line, the ads were losing money on that kind of sale.
 function AdsRoasChart({ dates, days, breakEven }) {
   const [hover, setHover] = useState(null);
-  const W = 900, H = 240, padL = 40, padR = 12, padT = 12, padB = 26;
+  const [boxRef, W] = useChartWidth();
+  const { H, padL } = chartBox(W, { axis: 40 });
+  const padR = 12, padT = 12, padB = 26;
   const iw = W - padL - padR, ih = H - padT - padB;
 
   const series = useMemo(() => dates.map((date, i) => {
@@ -466,7 +471,7 @@ function AdsRoasChart({ dates, days, breakEven }) {
   const y = v => padT + ih - (v / (yMax || 1)) * ih;
   const slot = iw / dates.length;
   const cx = i => padL + slot * i + slot / 2;
-  const labelEvery = Math.ceil(dates.length / 10);
+  const labelEvery = Math.ceil(dates.length / Math.min(10, maxLabels(iw)));
   const h = hover !== null ? series[hover] : null;
   const fmt = v => (v === null || v === undefined ? '—' : `${v.toFixed(2)}×`);
 
@@ -478,7 +483,7 @@ function AdsRoasChart({ dates, days, breakEven }) {
           <i className="lg-dot" /> daily <i className="lg-roll" /> 7-day <i className="lg-be" /> break-even
         </span>
       </h3>
-      <div className="chart" onMouseLeave={() => setHover(null)}>
+      <div className="chart" ref={boxRef} onMouseLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Ads ROAS by day against break-even">
           {ticks.map(t => (
             <g key={t}>
@@ -517,7 +522,7 @@ function AdsRoasChart({ dates, days, breakEven }) {
           ))}
         </svg>
         {h && (
-          <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+          <div className="tip" style={{ left: tipLeft(cx(hover), W) }}>
             <strong>{shortDay(h.date)}</strong>
             <span>ROAS <b>{fmt(h.roas)}</b></span>
             <span>7-day <b>{fmt(h.rolling)}</b></span>
@@ -581,7 +586,7 @@ function AdsRoas({ roas, breakEven, campaigns = [], dates = [], grossSales, adsS
 
           <h3 className="sub-h">Break-even by product</h3>
           <div className="table-wrap">
-            <table>
+            <table className="stack">
               <thead>
                 <tr>
                   <th>Product</th><th>Shipped</th><th className="r">Avg price</th>
@@ -590,27 +595,27 @@ function AdsRoas({ roas, breakEven, campaigns = [], dates = [], grossSales, adsS
               </thead>
               <tbody>
                 <tr>
-                  <td className="strong">Whole shop, paid orders</td><td className="muted">all</td><td className="r muted">—</td>
-                  <td className="r">{breakEven.blended.marginPct === null ? '—' : `${breakEven.blended.marginPct.toFixed(1)}% of sales`}</td>
-                  <td className="r strong">{shopWide === null ? 'none' : `${shopWide.toFixed(2)}×`}</td>
-                  <td className={`r ${verdict(shopWide) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                  <td className="strong">Whole shop, paid orders</td><td className="muted" data-label="Shipped">all</td><td className="r muted" data-label="Avg price">—</td>
+                  <td className="r" data-label="Earns before ads">{breakEven.blended.marginPct === null ? '—' : `${breakEven.blended.marginPct.toFixed(1)}% of sales`}</td>
+                  <td className="r strong" data-label="Break-even ROAS">{shopWide === null ? 'none' : `${shopWide.toFixed(2)}×`}</td>
+                  <td className={`r ${verdict(shopWide) || ''}`} data-label="Your ROAS">{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
                 </tr>
                 {allIn && (
                   <tr>
-                    <td className="strong">Whole shop, all-in</td><td className="muted">all costs</td><td className="r muted">—</td>
-                    <td className={`r ${tone(allIn.affordableSpend)}`}>{money(allIn.affordableSpend, { cents: false })} <span className="muted">to spend on ads</span></td>
-                    <td className="r strong">{allIn.roas === null ? 'none' : `${allIn.roas.toFixed(2)}×`}</td>
-                    <td className={`r ${verdict(allIn.roas) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                    <td className="strong">Whole shop, all-in</td><td className="muted" data-label="Shipped">all costs</td><td className="r muted" data-label="Avg price">—</td>
+                    <td className={`r ${tone(allIn.affordableSpend)}`} data-label="Earns before ads">{money(allIn.affordableSpend, { cents: false })} <span className="muted">to spend on ads</span></td>
+                    <td className="r strong" data-label="Break-even ROAS">{allIn.roas === null ? 'none' : `${allIn.roas.toFixed(2)}×`}</td>
+                    <td className={`r ${verdict(allIn.roas) || ''}`} data-label="Your ROAS">{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
                   </tr>
                 )}
                 {groups.map(g => (
                   <tr key={`${g.sku}|${g.fulfillment}`}>
                     <td>{g.size} <span className="muted">· {g.orders} orders</span></td>
-                    <td className="muted">{SHIPS[g.fulfillment] || g.fulfillment}</td>
-                    <td className="r">{money(g.avgPrice)}</td>
-                    <td className={`r ${tone(g.profitPerUnit)}`}>{money(g.profitPerUnit)} <span className="muted">({pct(g.marginPct)})</span></td>
-                    <td className="r strong">{g.roas === null ? <span className="neg" title="Loses money before any ad spend">never</span> : `${g.roas.toFixed(2)}×`}</td>
-                    <td className={`r ${verdict(g.roas) || ''}`}>{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
+                    <td className="muted" data-label="Shipped">{SHIPS[g.fulfillment] || g.fulfillment}</td>
+                    <td className="r" data-label="Avg price">{money(g.avgPrice)}</td>
+                    <td className={`r ${tone(g.profitPerUnit)}`} data-label="Earns before ads">{money(g.profitPerUnit)} <span className="muted">({pct(g.marginPct)})</span></td>
+                    <td className="r strong" data-label="Break-even ROAS">{g.roas === null ? <span className="neg" title="Loses money before any ad spend">never</span> : `${g.roas.toFixed(2)}×`}</td>
+                    <td className={`r ${verdict(g.roas) || ''}`} data-label="Your ROAS">{roas.roas === null ? '—' : `${roas.roas.toFixed(2)}×`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -739,7 +744,9 @@ function Fulfillment({ fulfillment, q, goSeller, goCosts }) {
 
 function DailyChart({ daily }) {
   const [hover, setHover] = useState(null);
-  const W = 900, H = 240, padL = 52, padR = 12, padT = 12, padB = 26;
+  const [boxRef, W] = useChartWidth();
+  const { H, padL } = chartBox(W);
+  const padR = 12, padT = 12, padB = 26;
   const iw = W - padL - padR, ih = H - padT - padB;
 
   const { yMin, yMax, ticks } = useMemo(() => {
@@ -760,11 +767,11 @@ function DailyChart({ daily }) {
   const barW = Math.max(2, slot * 0.62);
   const cx = i => padL + slot * i + slot / 2;
   const line = daily.map((d, i) => `${i ? 'L' : 'M'}${cx(i)},${y(d.adSpend)}`).join(' ');
-  const labelEvery = Math.ceil(daily.length / 10);
+  const labelEvery = Math.ceil(daily.length / Math.min(10, maxLabels(iw)));
   const h = hover !== null ? daily[hover] : null;
 
   return (
-    <div className="chart" onMouseLeave={() => setHover(null)}>
+    <div className="chart" ref={boxRef} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily net profit and ad spend">
         {ticks.map(t => (
           <g key={t}>
@@ -790,7 +797,7 @@ function DailyChart({ daily }) {
         ))}
       </svg>
       {h && (
-        <div className="tip" style={{ left: `${(cx(hover) / W) * 100}%` }}>
+        <div className="tip" style={{ left: tipLeft(cx(hover), W) }}>
           <strong>{shortDay(h.date)}</strong>
           <span>Payout <b>{money(h.payout)}</b></span>
           <span>Cost <b>{money(-h.cogs)}</b></span>
@@ -901,62 +908,67 @@ function TakeBreakdown({ daily }) {
 function DailyTable({ daily, onChanged }) {
   const rows = [...daily].reverse();
   const [showTake, setShowTake] = useState(true);
+  const [allCols, setAllCols] = useState(false); // phones show the five columns that matter unless this is ticked
   const takeTitle = 'Settled orders only. Already taken out of the payout.';
   // Partner commission and rows from before the kinds were stored get their own column, only when there are any.
   const showOtherComm = daily.some(d => (d.creatorPartner || 0) + (d.creatorUnsplit || 0) > 0);
   return (
     <div className="table-wrap">
-      <label className="muted take-toggle">
+      <label className="muted take-toggle only-sm">
+        <input type="checkbox" checked={allCols} onChange={e => setAllCols(e.target.checked)} /> Show every column (swipe sideways)
+      </label>
+      <label className={`muted take-toggle ${allCols ? '' : 'hide-sm'}`}>
         <input type="checkbox" checked={showTake} onChange={e => setShowTake(e.target.checked)} /> Show what TikTok took (fees, commission, labels)
       </label>
-      <table>
+      <table className={allCols ? '' : 'compact'}>
         <thead>
           <tr>
-            <th>Date</th><th className="r">Orders</th><th className="r">Units</th>
+            <th>Date</th><th className="r hide-sm">Orders</th><th className="r hide-sm">Units</th>
             {showTake && (
               <>
-                <th className="r" title={takeTitle}>Sales</th><th className="r" title={takeTitle}>TikTok fees</th>
-                <th className="r" title={`${takeTitle} Standard creator commission. Rates are set per creator (mostly 20%).`}>Standard comm.</th>
-                <th className="r" title={`${takeTitle} Creator commission when ads drove the sale. Each creator has their own Shop Ads rate (10%, 15% or 20%), on top of the ad spend.`}>Shop Ads comm.</th>
-                {showOtherComm && <th className="r" title={`${takeTitle} Partner commission, plus commission not split by kind yet (Sync now fills it in).`}>Other comm.</th>}
-                <th className="r" title={takeTitle}>Labels</th>
-                <th className="r" title="Refunds, shipping subsidies and other adjustments that move the payout">Other</th>
+                <th className="r hide-sm" title={takeTitle}>Sales</th><th className="r hide-sm" title={takeTitle}>TikTok fees</th>
+                <th className="r hide-sm" title={`${takeTitle} Standard creator commission. Rates are set per creator (mostly 20%).`}>Standard comm.</th>
+                <th className="r hide-sm" title={`${takeTitle} Creator commission when ads drove the sale. Each creator has their own Shop Ads rate (10%, 15% or 20%), on top of the ad spend.`}>Shop Ads comm.</th>
+                {showOtherComm && <th className="r hide-sm" title={`${takeTitle} Partner commission, plus commission not split by kind yet (Sync now fills it in).`}>Other comm.</th>}
+                <th className="r hide-sm" title={takeTitle}>Labels</th>
+                <th className="r hide-sm" title="Refunds, shipping subsidies and other adjustments that move the payout">Other</th>
               </>
             )}
-            <th className="r">Payout</th>
-            <th className="r">Cost</th><th className="r">Before ads</th><th className="r">Ad spend</th>
-            <th className="r" title="FBT warehouse fees and other TikTok charges tied to no order">TikTok charges</th>
-            <th className="r">Net profit</th><th className="r">Margin</th>
+            <th className="r hide-sm">Payout</th>
+            <th className="r hide-sm">Cost</th><th className="r">Before ads</th><th className="r">Ad spend</th>
+            <th className="r hide-sm" title="FBT warehouse fees and other TikTok charges tied to no order">TikTok charges</th>
+            <th className="r">Net profit</th><th className="r hide-sm">Margin</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(d => (
             <tr key={d.date}>
-              <td>{shortDay(d.date)}{d.pendingOrders > 0 && <span className="tag warn" title={`${d.pendingOrders} orders awaiting payout`}>{d.pendingOrders} pending</span>}</td>
-              <td className="r">{d.orders}</td>
-              <td className="r">{d.units}</td>
+              <td>{shortDay(d.date)}{d.pendingOrders > 0 && <span className="tag warn" title={`${d.pendingOrders} orders awaiting payout`}><span className="long">{d.pendingOrders} pending</span><span className="short">{d.pendingOrders}</span></span>}</td>
+              <td className="r hide-sm">{d.orders}</td>
+              <td className="r hide-sm">{d.units}</td>
               {showTake && (
                 <>
-                  <td className="r">{money(d.breakdownSales)}</td>
-                  <td className="r">{money(-d.platformFees)}</td>
-                  <td className="r">{money(-d.creatorOrganic)}</td>
-                  <td className="r">{money(-d.creatorAds)}</td>
-                  {showOtherComm && <td className="r">{money(-(d.creatorPartner + d.creatorUnsplit))}</td>}
-                  <td className="r">{money(-d.labelShipping)}</td>
-                  <td className={`r ${tone(d.otherAdjustments)}`}>{money(d.otherAdjustments)}</td>
+                  <td className="r hide-sm">{money(d.breakdownSales)}</td>
+                  <td className="r hide-sm">{money(-d.platformFees)}</td>
+                  <td className="r hide-sm">{money(-d.creatorOrganic)}</td>
+                  <td className="r hide-sm">{money(-d.creatorAds)}</td>
+                  {showOtherComm && <td className="r hide-sm">{money(-(d.creatorPartner + d.creatorUnsplit))}</td>}
+                  <td className="r hide-sm">{money(-d.labelShipping)}</td>
+                  <td className={`r hide-sm ${tone(d.otherAdjustments)}`}>{money(d.otherAdjustments)}</td>
                 </>
               )}
-              <td className="r">{money(d.payout)}</td>
-              <td className="r" title={d.mcfFees > 0 ? `${money(d.cogs)} product + ${money(d.mcfFees)} MCF` : undefined}>{money(-(d.cogs + d.mcfFees))}</td>
+              <td className="r hide-sm">{money(d.payout)}</td>
+              <td className="r hide-sm" title={d.mcfFees > 0 ? `${money(d.cogs)} product + ${money(d.mcfFees)} MCF` : undefined}>{money(-(d.cogs + d.mcfFees))}</td>
               <td className={`r ${tone(d.profitBeforeAds)}`}>{money(d.profitBeforeAds)}</td>
               <td className="r"><AdCell date={d.date} amount={d.adSpend} onSaved={onChanged} /></td>
-              <td className="r">{money(-d.otherCharges)}</td>
+              <td className="r hide-sm">{money(-d.otherCharges)}</td>
               <td className={`r strong ${tone(d.netProfit)}`}>{money(d.netProfit)}</td>
-              <td className="r">{pct(d.marginPct)}</td>
+              <td className="r hide-sm">{pct(d.marginPct)}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <p className="muted only-sm pad">An orange number beside a date is orders still awaiting payout.</p>
     </div>
   );
 }
@@ -1068,26 +1080,26 @@ function Orders({ range, filter, setFilter }) {
         <input className="search" placeholder="Find an order ID" value={query} onChange={e => setQuery(e.target.value)} />
       </h2>
       <div className="table-wrap">
-        <table>
+        <table className="compact">
           <thead>
-            <tr><th>Day</th><th>Order</th><th>Status</th><th className="r">Units</th><th className="r">Gross</th><th className="r">Payout</th><th className="r">Cost</th><th className="r">Profit</th></tr>
+            <tr><th>Day</th><th>Order</th><th className="hide-sm">Status</th><th className="r hide-sm">Units</th><th className="r hide-sm">Gross</th><th className="r">Payout</th><th className="r hide-sm">Cost</th><th className="r">Profit</th></tr>
           </thead>
           <tbody>
             {filtered.slice(0, ORDER_LIMIT).map(o => (
               <tr key={o.id} className={o.excluded ? 'dim' : ''}>
                 <td>{shortDay(o.day)}</td>
-                <td><code>{o.id}</code>{o.hasReturn && <span className="tag warn">return</span>}</td>
-                <td>
+                <td><code><span className="id-head">{o.id.slice(0, -8)}</span>{o.id.slice(-8)}</code>{o.hasReturn && <span className="tag warn">return</span>}{o.excluded && <span className="tag only-compact">{o.status.toLowerCase()}</span>}{o.free && <span className="tag free only-compact">{o.sample ? 'sample' : 'free'}</span>}</td>
+                <td className="hide-sm">
                   {o.excluded ? <span className="tag">{o.status.toLowerCase()}</span> : <span className={`tag ${o.payoutState}`}>{o.payoutState}</span>}
                   {o.free && <span className="tag free" title={o.sample ? 'TikTok flags this as a creator sample' : '$0 order'}>{o.sample ? 'sample' : 'free'}</span>}
                   {o.fulfillment === 'seller' && (
                     <span className="tag seller" title={`Shipped by the seller (${o.fulfillmentType} / ${o.shippingType}); no TikTok label cost`}>seller-shipped</span>
                   )}
                 </td>
-                <td className="r">{o.units}</td>
-                <td className="r">{money(o.grossSales)}</td>
+                <td className="r hide-sm">{o.units}</td>
+                <td className="r hide-sm">{money(o.grossSales)}</td>
                 <td className="r">{o.excluded ? '—' : money(o.payout)}</td>
-                <td className="r" title={o.mcfFee > 0 ? `${money(o.cogs)} product + ${money(o.mcfFee)} MCF` : undefined}>
+                <td className="r hide-sm" title={o.mcfFee > 0 ? `${money(o.cogs)} product + ${money(o.mcfFee)} MCF` : undefined}>
                   {o.excluded ? '—' : o.cogsComplete ? money(-(o.cogs + o.mcfFee)) : <span className="tag bad">no cost</span>}
                   {!o.excluded && o.mcfFeeMissing && <span className="tag bad" title="Seller-shipped, but no MCF fee is set for this SKU">no MCF fee</span>}
                 </td>
