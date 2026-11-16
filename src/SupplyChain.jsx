@@ -333,12 +333,30 @@ function DemandPanel({ demand, settings: s, busy, onSave }) {
 
       {auto ? (
         <div className="demand-channels">
-          {demand.channels.map(c => (
-            <div key={c.id} className="chip">
-              <span className="strong">{c.label}</span> {n0(c.perWeek)}/wk
-              <span className="muted">· {c.source}{c.detail ? `, ${c.detail}` : ''}{c.enteredAt ? ` ${timeAgo(c.enteredAt)}` : ''}</span>
-            </div>
-          ))}
+          <div className="networks">
+            {(demand.networks || []).map(n => (
+              <div key={n.id} className="network">
+                <div className="network-head">
+                  <span className="strong">{n.label}</span>
+                  <span className="network-value">{n0(n.perWeek)}/wk</span>
+                </div>
+                <div className="hint">{n.note}</div>
+                <div className="network-parts">
+                  {demand.channels.filter(c => c.network === n.id).map(c => (
+                    <span key={c.id} className="chip" title={c.source + (c.detail ? `, ${c.detail}` : '')}>
+                      {c.label} <span className="strong">{n0(c.perWeek)}</span>
+                      {c.enteredAt && <span className="muted"> · typed {timeAgo(c.enteredAt)}</span>}
+                    </span>
+                  ))}
+                  {n.id === 'fba' && !demand.shopifyLinked && <span className="chip warn">Shopify not connected</span>}
+                  {n.id === 'fba' && demand.shopifyError && <span className="chip bad" title={demand.shopifyError}>Shopify pull failed</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {demand.channels.find(c => c.id === 'shopify')?.otherSkus?.length > 0 && (
+            <p className="hint">Shopify SKUs not counted as buckets: {demand.channels.find(c => c.id === 'shopify').otherSkus.join(', ')}. Tell Claude if any of these is a bucket.</p>
+          )}
           {amazonTyped && (
             <label className="inline-label">
               <span>Amazon buckets / week{demand.amazonError ? ' (report failed: ' + demand.amazonError + ')' : ''}</span>

@@ -50,3 +50,10 @@
 .demand-channels .hint { flex: 1 1 100%; margin: 0; }
 .supply .chip .strong { color: var(--text); }
 .supply label.inline-label input { width: 130px; }
+
+.networks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; flex: 1 1 100%; }
+.network { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface2); }
+.network-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.network-value { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.network .hint { margin: 0; }
+.network-parts { display: flex; flex-wrap: wrap; gap: 6px; }
