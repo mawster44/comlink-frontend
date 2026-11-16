@@ -113,12 +113,9 @@ export default function SupplyChain() {
         </div>
       </div>
 
+      <DemandPanel demand={data.demand} settings={s} busy={busy} onSave={patch => act('/settings', 'PATCH', patch)} />
+
       <div className="card demand">
-        <label>
-          <span>Buckets sold per week</span>
-          <input type="number" min="0" defaultValue={s.bucketsPerWeek ?? ''} placeholder="e.g. 250"
-            onBlur={e => saveSetting('bucketsPerWeek', e.target.value)} />
-        </label>
         <label>
           <span>Safety stock (days)</span>
           <input type="number" min="0" defaultValue={s.safetyDays ?? 14} onBlur={e => saveSetting('safetyDays', e.target.value)} />
@@ -127,7 +124,7 @@ export default function SupplyChain() {
           <span>Each order covers (days)</span>
           <input type="number" min="0" defaultValue={s.orderCoverDays ?? 60} onBlur={e => saveSetting('orderCoverDays', e.target.value)} />
         </label>
-        <p className="hint">Demand drives every date below. Amazon + TikTok + Shopify, all channels. Reorder date = run-out date, minus the supplier's lead time, minus safety stock.</p>
+        <p className="hint">Reorder date = run-out date, minus the supplier's lead time, minus safety stock.</p>
       </div>
 
       <div className="tabs">
@@ -305,6 +302,60 @@ export default function SupplyChain() {
           {data.suppliers.map(sup => <SupplierCard key={sup.id} sup={sup} items={data.items.filter(i => i.supplierId === sup.id)} busy={busy}
             onSave={patch => act(`/suppliers/${sup.id}`, 'PUT', patch)} />)}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Weekly bucket demand: measured from TikTok orders and Amazon (Sellerboard report, or a figure typed in until that is linked),
+// with a switch to a typed-in total instead.
+function DemandPanel({ demand, settings: s, busy, onSave }) {
+  const auto = demand.used === 'auto';
+  const amazon = demand.channels.find(c => c.id === 'amazon');
+  const amazonTyped = !demand.amazonReportLinked || demand.amazonError;
+  return (
+    <div className="card demand-panel">
+      <div className="demand-top">
+        <div>
+          <span className="kpi-label">Selling per week</span>
+          <div className="kpi-value">{auto ? `${n0(demand.perWeek)} buckets` : `${n0(s.bucketsPerWeek)} buckets`}</div>
+          <div className="kpi-sub">
+            {auto
+              ? <>Measured over {shortDay(demand.from)} – {shortDay(demand.to)}{demand.missing.length ? <span className="neg"> · missing {demand.missing.join(', ')}</span> : null}</>
+              : 'Typed-in figure (measured demand is switched off)'}
+          </div>
+        </div>
+        <div className="seg">
+          <button className={auto ? 'on' : ''} disabled={busy || demand.perWeek <= 0} onClick={() => onSave({ demandAuto: true })}>From sales</button>
+          <button className={!auto ? 'on' : ''} disabled={busy} onClick={() => onSave({ demandAuto: false })}>Typed in</button>
+        </div>
+      </div>
+
+      {auto ? (
+        <div className="demand-channels">
+          {demand.channels.map(c => (
+            <div key={c.id} className="chip">
+              <span className="strong">{c.label}</span> {n0(c.perWeek)}/wk
+              <span className="muted">· {c.source}{c.detail ? `, ${c.detail}` : ''}{c.enteredAt ? ` ${timeAgo(c.enteredAt)}` : ''}</span>
+            </div>
+          ))}
+          {amazonTyped && (
+            <label className="inline-label">
+              <span>Amazon buckets / week{demand.amazonError ? ' (report failed: ' + demand.amazonError + ')' : ''}</span>
+              <input type="number" min="0" defaultValue={s.amazonPerWeek ?? ''} placeholder={amazon ? '' : 'e.g. 190'}
+                onBlur={e => { if (String(s.amazonPerWeek ?? '') !== e.target.value) onSave({ amazonPerWeek: e.target.value }); }} />
+            </label>
+          )}
+          {!demand.amazonReportLinked && (
+            <p className="hint">Amazon is typed in until a Sellerboard "by product" report link is added to the server (SELLERBOARD_PRODUCT_REPORT_URL); then it fills itself in.</p>
+          )}
+        </div>
+      ) : (
+        <label className="inline-label">
+          <span>Buckets sold per week, all channels</span>
+          <input type="number" min="0" defaultValue={s.bucketsPerWeek ?? ''} placeholder="e.g. 350"
+            onBlur={e => { if (String(s.bucketsPerWeek ?? '') !== e.target.value) onSave({ bucketsPerWeek: e.target.value }); }} />
+        </label>
       )}
     </div>
   );
