@@ -5,6 +5,7 @@ import { AffiliateList, AffiliateThread } from './AffiliateInbox.jsx';
 import { CrmListMeta, CrmThreadPanel, NoteMessage } from './CrmTools.jsx';
 import ProfitDashboard from './ProfitDashboard.jsx';
 import BusinessDashboard from './BusinessDashboard.jsx';
+import SupplyChain from './SupplyChain.jsx';
 import { apiFetch, clearToken } from './auth.js';
 import './App.css';
 
@@ -36,7 +37,7 @@ export default function App({ user, onLogout }) {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [showSettings, setShowSettings] = useState(window.location.pathname === '/settings');
   const [showBrandBrain, setShowBrandBrain] = useState(false);
-  const [view, setView] = useState('customers'); // 'customers' | 'affiliates' | 'profit' | 'business' (last two admin only)
+  const [view, setView] = useState('customers'); // 'customers' | 'affiliates' | 'profit' | 'business' (admin only) | 'supply'
   const [affiliateActiveId, setAffiliateActiveId] = useState(null);
   const [crmData, setCrmData] = useState({});
   const [activeCrm, setActiveCrm] = useState(null);
@@ -195,6 +196,12 @@ export default function App({ user, onLogout }) {
               Business
             </button>
           )}
+          <button
+            className={`toggle-btn ${view === 'supply' ? 'active' : ''}`}
+            onClick={() => setView('supply')}
+          >
+            Supply
+          </button>
         </div>
 
         {view === 'customers' && (
@@ -234,6 +241,10 @@ export default function App({ user, onLogout }) {
           <p className="empty" style={{ padding: 16 }}>One daily profit number across your sales channels (TikTok, Amazon, Shopify), before overhead. Admin only.</p>
         )}
 
+        {view === 'supply' && (
+          <p className="empty" style={{ padding: 16 }}>Pails, boxes, labels and tallow at Centrillium: stock, open orders, and when to reorder.</p>
+        )}
+
         {view === 'affiliates' && (
           <AffiliateList
             activeId={affiliateActiveId}
@@ -250,6 +261,7 @@ export default function App({ user, onLogout }) {
         )}
         {view === 'profit' && user?.role === 'admin' && <ProfitDashboard />}
         {view === 'business' && user?.role === 'admin' && <BusinessDashboard />}
+        {view === 'supply' && <SupplyChain />}
         {view === 'customers' && !active ? (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
