@@ -57,3 +57,6 @@
 .network-value { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .network .hint { margin: 0; }
 .network-parts { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.supply tr.subtotal td { border-top: 1px solid var(--border); }
+.supply tr.total td { border-top: 2px solid var(--border); font-size: 15px; }

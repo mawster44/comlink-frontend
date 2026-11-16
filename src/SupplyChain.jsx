@@ -12,6 +12,7 @@ const STATUS = {
   'ok': { label: 'OK', cls: 'settled' },
   'no-count': { label: 'Needs count', cls: 'pending' },
   'no-demand': { label: 'Set demand', cls: 'pending' },
+  'per-fill': { label: 'Bought per fill', cls: 'estimated' },
 };
 
 const n0 = (n) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('en-US'));
@@ -128,7 +129,7 @@ export default function SupplyChain() {
       </div>
 
       <div className="tabs">
-        {[['board', 'Reorder board'], ['orders', `Orders${openOrders.length ? ` (${openOrders.length})` : ''}`], ['runs', 'Fill runs'], ['inputs', 'Inputs'], ['suppliers', 'Suppliers']].map(([k, label]) => (
+        {[['board', 'Reorder board'], ['orders', `Orders${openOrders.length ? ` (${openOrders.length})` : ''}`], ['runs', 'Fill runs'], ['cost', 'Cost per bucket'], ['inputs', 'Inputs'], ['suppliers', 'Suppliers']].map(([k, label]) => (
           <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -151,7 +152,11 @@ export default function SupplyChain() {
                     <td className="strong">{item.name}</td>
                     <td className="muted">{suppliers[item.supplierId]?.name}</td>
                     <td className="r">
-                      {counting === r.itemId ? (
+                      {r.status === 'per-fill' ? (
+                        <span className="muted" title="Not held as stock: bought as buckets are filled">
+                          {r.perDay ? `${n0(r.perDay * 7)} ${item.unit}/wk used` : 'not stocked'}
+                        </span>
+                      ) : counting === r.itemId ? (
                         <form className="inline" onSubmit={e => { e.preventDefault(); act(`/items/${r.itemId}/count`, 'POST', { qty: countQty }, () => setCounting(null)); }}>
                           <input type="number" min="0" autoFocus value={countQty} onChange={e => setCountQty(e.target.value)} placeholder={item.unit} />
                           <button className="primary small" disabled={busy}>Save</button>
@@ -170,8 +175,10 @@ export default function SupplyChain() {
                     <td className="strong">{day(r.orderBy)}</td>
                     <td><span className={`tag ${st.cls}`}>{st.label}</span></td>
                     <td className="actions">
-                      <button className="link" onClick={() => { setCounting(r.itemId); setCountQty(''); }}>Count</button>
-                      <button className="link" onClick={() => startOrder(r.itemId, r.suggestedQty)}>Order{r.suggestedQty ? ` ${n0(r.suggestedQty)}` : ''}</button>
+                      {r.status !== 'per-fill' && <>
+                        <button className="link" onClick={() => { setCounting(r.itemId); setCountQty(''); }}>Count</button>
+                        <button className="link" onClick={() => startOrder(r.itemId, r.suggestedQty)}>Order{r.suggestedQty ? ` ${n0(r.suggestedQty)}` : ''}</button>
+                      </>}
                     </td>
                   </tr>
                 );
@@ -274,6 +281,8 @@ export default function SupplyChain() {
         </>
       )}
 
+      {tab === 'cost' && data.cost && <CostCard cost={data.cost} settings={s} busy={busy} onSave={patch => act('/settings', 'PATCH', patch)} />}
+
       {tab === 'inputs' && (
         <div className="card table-wrap">
           <table>
@@ -375,6 +384,48 @@ function DemandPanel({ demand, settings: s, busy, onSave }) {
             onBlur={e => { if (String(s.bucketsPerWeek ?? '') !== e.target.value) onSave({ bucketsPerWeek: e.target.value }); }} />
         </label>
       )}
+    </div>
+  );
+}
+
+// Landed cost of one bucket, from each input's unit cost (Inputs tab) and the per-bucket freight below.
+const dollars = (n, digits = 2) => (n === null || n === undefined ? '—' : `$${n.toFixed(digits)}`);
+
+function CostCard({ cost, settings: s, busy, onSave }) {
+  const freight = (k, label, hint) => (
+    <tr>
+      <td className="strong">{label}<div className="sub">{hint}</div></td>
+      <td className="r muted">per bucket</td>
+      <td className="r">
+        <input className="cell" type="number" min="0" step="0.01" defaultValue={s[k] ?? ''} placeholder="—" disabled={busy}
+          onBlur={e => { if (String(s[k] ?? '') !== e.target.value) onSave({ [k]: e.target.value }); }} />
+      </td>
+      <td className="r">{dollars(s[k])}</td>
+    </tr>
+  );
+  return (
+    <div className="card table-wrap">
+      <table>
+        <thead><tr><th>Cost</th><th className="r">Per bucket</th><th className="r">Unit cost</th><th className="r">Per bucket $</th></tr></thead>
+        <tbody>
+          {cost.lines.map(l => (
+            <tr key={l.itemId} className={l.cost === null ? 'dim' : ''}>
+              <td className="strong">{l.name}</td>
+              <td className="r muted">{l.perBucket} {l.unit}</td>
+              <td className="r">{l.unitCost === null ? 'not set' : dollars(l.unitCost, 4)}</td>
+              <td className="r">{dollars(l.cost)}</td>
+            </tr>
+          ))}
+          {freight('freightInPerBucket', 'Freight in', 'Supplies to Centrillium (e.g. $1,559 ÷ 4,140 pails)')}
+          <tr className="subtotal"><td className="strong">At Centrillium</td><td></td><td></td><td className="r strong">{dollars(cost.atCoPacker)}</td></tr>
+          {freight('freightOutPerBucket', 'Ship to Amazon', 'Filled buckets, Centrillium to FBA')}
+          <tr className="total"><td className="strong">Landed at Amazon</td><td></td><td></td><td className="r strong">{dollars(cost.total)}</td></tr>
+        </tbody>
+      </table>
+      <p className="hint pad">
+        Unit costs come from the Inputs tab; change them there when a new invoice changes a price.
+        {cost.missing.length > 0 && <span className="neg"> Not costed yet: {cost.missing.join(', ')}.</span>}
+      </p>
     </div>
   );
 }
