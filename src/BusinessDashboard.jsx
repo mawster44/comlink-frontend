@@ -59,6 +59,28 @@ export default function BusinessDashboard() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // Pulls fresh TikTok orders, ad spend and the Amazon (Sellerboard) and Shopify feeds on the server, then reloads the page.
+  // The server also does this on its own every few hours; this is for when the numbers are wanted now.
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState(null);
+  async function sync() {
+    setSyncing(true);
+    setSyncNote(null);
+    try {
+      const result = await readJson(await apiFetch('/api/profit/sync', { method: 'POST', body: JSON.stringify({ days: 30 }) }));
+      const warnings = [
+        ...(result.warnings || []).map(w => `${w.source} (${w.error})`),
+        ...(result.ads?.error ? [`ad spend (${result.ads.error})`] : []),
+      ];
+      setSyncNote(warnings.length ? { bad: true, text: `Synced with warnings: ${warnings.join('; ')}` } : { text: 'Synced TikTok, Amazon and Shopify.' });
+      await load();
+    } catch (e) {
+      setSyncNote({ bad: true, text: e.message });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const cards = useMemo(() => (data ? periods(today).map(p => ({ ...p, ...aggregate(data.days, data.channels, p) })) : []), [data, today]);
 
   return (
@@ -68,14 +90,19 @@ export default function BusinessDashboard() {
           <h1>Business profit</h1>
           <div className="profit-sub">
             <span className="formula">What we keep after product cost, fees, shipping and ad spend, before overhead. An estimate for checking in, not the books. </span>
-            {data?.lastSync && <>TikTok last synced {timeAgo(data.lastSync)}.</>}
+            {data?.lastSync && <>TikTok synced {timeAgo(data.lastSync)}.</>}
+            {data?.feedsAt?.amazon && <> Amazon updated {timeAgo(data.feedsAt.amazon)}.</>}
+            {data?.feedsAt?.shopify && <> Shopify updated {timeAgo(data.feedsAt.shopify)}.</>}
+            {data && <> Updates itself every few hours.</>}
           </div>
         </div>
         <div className="profit-controls">
-          <button className="primary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+          <button onClick={load} disabled={loading || syncing}>{loading && !syncing ? 'Loading…' : 'Refresh'}</button>
+          <button className="primary" onClick={sync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
         </div>
       </div>
 
+      {syncNote && <div className={`note ${syncNote.bad ? 'bad' : 'good'}`}>{syncNote.text}</div>}
       {error && <div className="note bad">{error}</div>}
 
       {data && (
